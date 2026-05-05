@@ -15,6 +15,6 @@
     "sourceMap": true,
     "moduleResolution": "node"
   },
-  "include": ["index.ts", "db/**/*.ts", "routes/**/*.ts", "storage/**/*.ts"],
+  "include": ["index.ts", "src/**/*.ts", "routes/**/*.ts", "storage/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

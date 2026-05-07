@@ -1,10 +1,32 @@
+import { AuthRepository } from "./auth.repository";
+import { CatalogRepository } from "./catalog.repository";
+import { CommerceRepository } from "./commerce.repository";
+import { MessagingRepository } from "./messaging.repository";
+import { NegotiationRepository } from "./negotiation.repository";
+import { NotificationsRepository } from "./notifications.repository";
+import { SessionsRepository } from "./sessions.repository";
+import { TrustRepository } from "./trust.repository";
 import { UsersRepository } from "./users.repository";
-import { PostsRepository } from "./posts.repository";
+import { WebrtcRepository } from "./webrtc.repository";
 
-// Create singleton instances
+export const authRepository = new AuthRepository();
 export const usersRepository = new UsersRepository();
-export const postsRepository = new PostsRepository();
+export const catalogRepository = new CatalogRepository();
+export const sessionsRepository = new SessionsRepository();
+export const negotiationRepository = new NegotiationRepository();
+export const messagingRepository = new MessagingRepository();
+export const commerceRepository = new CommerceRepository();
+export const trustRepository = new TrustRepository();
+export const notificationsRepository = new NotificationsRepository();
+export const webrtcRepository = new WebrtcRepository();
 
-// Export repositories
+export * from "./auth.repository";
 export * from "./users.repository";
-export * from "./posts.repository";
+export * from "./catalog.repository";
+export * from "./sessions.repository";
+export * from "./negotiation.repository";
+export * from "./messaging.repository";
+export * from "./commerce.repository";
+export * from "./trust.repository";
+export * from "./notifications.repository";
+export * from "./webrtc.repository";

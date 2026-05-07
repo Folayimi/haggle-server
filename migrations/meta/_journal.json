@@ -15,6 +15,13 @@
       "when": 1777990883490,
       "tag": "0001_thankful_wonder_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778147505583,
+      "tag": "0002_absurd_kang",
+      "breakpoints": true
     }
   ]
 }

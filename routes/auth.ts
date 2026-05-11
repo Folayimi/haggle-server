@@ -31,6 +31,18 @@ router.post("/signup", async (req: Request, res: Response) => {
 
     console.log("Creating user account with data:", body);
 
+    const phoneOrEmailExists = await authRepository.checkPhoneOrEmailExists(
+      body.email,
+      body.phone_e164,
+    );
+
+    if (phoneOrEmailExists) {
+      return res.status(409).json({ error: phoneOrEmailExists });
+    }
+    {
+      console.log("No existing user with provided email or phone");
+    }
+
     const user = await authRepository.createUserAccount({
       full_name: body.full_name,
       username: body.username ? body.username : body.email.split("@")[0],

@@ -173,4 +173,37 @@ export class AuthRepository extends BaseRepository {
 
     return session ?? null;
   }
+
+  async checkPhoneOrEmailExists(
+    email?: string,
+    phone_e164?: string,
+  ): Promise<String | null> {
+    if (!email && !phone_e164) {
+      return null;
+    }
+
+    console.log("checking.....");
+
+    const emailquery = this.database.select().from(authIdentities);
+
+    if (email) {
+      emailquery.where(eq(authIdentities.email, email));
+    }
+
+    const phonequery = this.database.select().from(authIdentities);
+
+    if (phone_e164) {
+      phonequery.where(eq(authIdentities.phone_e164, phone_e164));
+    }
+
+    const phone_existing = await phonequery;
+    const email_existing = await emailquery;
+
+    if (phone_existing.length > 0) {
+      return "Account with this device already exists";
+    } else if (email_existing.length > 0) {
+      return "Email already in use";
+    }
+    return null;
+  }
 }

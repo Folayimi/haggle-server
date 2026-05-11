@@ -14,7 +14,7 @@ import { UserPrimaryRole, UserStatus } from "../../src/db/schema";
 export interface UpdateCurrentUserInput {
   primary_role?: (typeof UserPrimaryRole)[keyof typeof UserPrimaryRole];
   status?: (typeof UserStatus)[keyof typeof UserStatus];
-  display_name?: string;
+  full_name?: string;
   username?: string;
   avatar_url?: string;
   bio?: string;
@@ -86,11 +86,14 @@ export class UsersRepository extends BaseRepository {
     });
 
     if (Object.keys(userValues).length > 1) {
-      await this.database.update(users).set(userValues).where(eq(users.id, userId));
+      await this.database
+        .update(users)
+        .set(userValues)
+        .where(eq(users.id, userId));
     }
 
     const profileValues = this.pickDefined({
-      display_name: input.display_name,
+      full_name: input.full_name,
       username: input.username,
       avatar_url: input.avatar_url,
       bio: input.bio,
@@ -109,7 +112,7 @@ export class UsersRepository extends BaseRepository {
       if (existingProfile.length === 0) {
         await this.database.insert(userProfiles).values({
           user_id: userId,
-          display_name: input.display_name ?? "New User",
+          full_name: input.full_name ?? "New User",
           username: input.username ?? `user_${userId.slice(0, 8)}`,
           avatar_url: input.avatar_url,
           bio: input.bio,

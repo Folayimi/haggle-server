@@ -1,18 +1,19 @@
 import { Router, type Request, type Response } from "express";
 import { authRepository } from "../storage";
+import bcrypt from "bcrypt";
 
 const router = Router();
 
 router.post("/signup", async (req: Request, res: Response) => {
   try {
     const body = req.body as {
-      display_name?: string;
+      full_name?: string;
       username?: string;
       primary_role?: string;
       status?: string;
       email?: string;
       phone_e164?: string;
-      password_hash?: string;
+      password?: string;
       provider?: string;
       provider_uid?: string;
       avatar_url?: string;
@@ -22,20 +23,23 @@ router.post("/signup", async (req: Request, res: Response) => {
       response_time_label?: string;
     };
 
-    if (!body.display_name || !body.username) {
+    if (!body.full_name || !body.username || !body.password) {
       return res
         .status(400)
-        .json({ error: "display_name and username are required" });
+        .json({ error: "full_name, username, and password are required" });
     }
 
     const user = await authRepository.createUserAccount({
-      display_name: body.display_name,
+      full_name: body.full_name,
       username: body.username,
       primary_role: body.primary_role as never,
       status: body.status as never,
       email: body.email,
       phone_e164: body.phone_e164,
-      password_hash: body.password_hash,
+      password_hash:
+        body.password && body.password.length > 0
+          ? await bcrypt.hash(body.password, 10)
+          : undefined,
       provider: body.provider as never,
       provider_uid: body.provider_uid,
       avatar_url: body.avatar_url,
@@ -45,9 +49,17 @@ router.post("/signup", async (req: Request, res: Response) => {
       response_time_label: body.response_time_label,
     });
 
-    return res.status(201).json(user);
+    console.log("Created user account:", user);
+
+    return res.status(201).json({
+      ...user,
+      message: "User account created successfully",
+      success: true,
+    });
   } catch (error) {
-    return res.status(500).json({ error: "Failed to create user account", details: error });
+    return res
+      .status(500)
+      .json({ error: "Failed to create user account", details: error });
   }
 });
 
@@ -62,9 +74,16 @@ router.post("/otp", async (req: Request, res: Response) => {
       expires_at?: string;
     };
 
-    if (!body.channel || !body.purpose || !body.target || !body.code_hash || !body.expires_at) {
+    if (
+      !body.channel ||
+      !body.purpose ||
+      !body.target ||
+      !body.code_hash ||
+      !body.expires_at
+    ) {
       return res.status(400).json({
-        error: "channel, purpose, target, code_hash, and expires_at are required",
+        error:
+          "channel, purpose, target, code_hash, and expires_at are required",
       });
     }
 
@@ -79,7 +98,9 @@ router.post("/otp", async (req: Request, res: Response) => {
 
     return res.status(201).json(otp);
   } catch (error) {
-    return res.status(500).json({ error: "Failed to create OTP", details: error });
+    return res
+      .status(500)
+      .json({ error: "Failed to create OTP", details: error });
   }
 });
 
@@ -113,7 +134,9 @@ router.post("/sessions", async (req: Request, res: Response) => {
 
     return res.status(201).json(session);
   } catch (error) {
-    return res.status(500).json({ error: "Failed to create session", details: error });
+    return res
+      .status(500)
+      .json({ error: "Failed to create session", details: error });
   }
 });
 

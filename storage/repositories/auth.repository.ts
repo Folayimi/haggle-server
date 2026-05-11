@@ -17,7 +17,7 @@ import {
 import { AuthProvider, UserPrimaryRole, UserStatus } from "../../src/db/schema";
 
 export interface CreateUserAccountInput {
-  display_name: string;
+  full_name: string;
   username: string;
   primary_role?: (typeof UserPrimaryRole)[keyof typeof UserPrimaryRole];
   status?: (typeof UserStatus)[keyof typeof UserStatus];
@@ -45,7 +45,7 @@ export class AuthRepository extends BaseRepository {
 
     const profileValues: InsertUserProfile = {
       user_id: user.id,
-      display_name: input.display_name,
+      full_name: input.full_name,
       username: input.username,
       avatar_url: input.avatar_url,
       bio: input.bio,
@@ -63,7 +63,8 @@ export class AuthRepository extends BaseRepository {
         provider:
           input.provider ??
           (input.email ? AuthProvider.EMAIL : AuthProvider.PHONE),
-        provider_uid: input.provider_uid ?? input.email ?? input.phone_e164 ?? user.id,
+        provider_uid:
+          input.provider_uid ?? input.email ?? input.phone_e164 ?? user.id,
         email: input.email,
         phone_e164: input.phone_e164,
         password_hash: input.password_hash,
@@ -119,14 +120,20 @@ export class AuthRepository extends BaseRepository {
       .select()
       .from(authIdentities)
       .where(
-        and(eq(authIdentities.user_id, userId), eq(authIdentities.is_primary, true)),
+        and(
+          eq(authIdentities.user_id, userId),
+          eq(authIdentities.is_primary, true),
+        ),
       );
 
     return result[0] ?? null;
   }
 
   async createOtp(input: InsertAuthOtp) {
-    const [otp] = await this.database.insert(authOtps).values(input).returning();
+    const [otp] = await this.database
+      .insert(authOtps)
+      .values(input)
+      .returning();
     return otp;
   }
 

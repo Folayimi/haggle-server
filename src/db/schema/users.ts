@@ -33,7 +33,7 @@ export const userProfiles = pgTable(
     user_id: uuid("user_id")
       .primaryKey()
       .references(() => users.id, { onDelete: "cascade" }),
-    display_name: text("display_name").notNull(),
+    full_name: text("full_name").notNull(),
     username: text("username").notNull().unique(),
     avatar_url: text("avatar_url"),
     bio: text("bio"),

@@ -65,7 +65,7 @@ Manages user profile data, seller business information, addresses, and preferenc
 **userProfiles**
 
 - Public profile shown in chat, reviews, and seller profiles
-- Fields: `user_id` (PK), `display_name`, `username` (unique), `avatar_url`, `bio`, `country_code`, `city`, `response_time_label`
+- Fields: `user_id` (PK), `full_name`, `username` (unique), `avatar_url`, `bio`, `country_code`, `city`, `response_time_label`
 
 **sellerProfiles**
 

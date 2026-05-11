@@ -417,7 +417,7 @@ CREATE TABLE "user_addresses" (
 --> statement-breakpoint
 CREATE TABLE "user_profiles" (
 	"user_id" uuid PRIMARY KEY NOT NULL,
-	"display_name" text NOT NULL,
+	"full_name" text NOT NULL,
 	"username" text NOT NULL,
 	"avatar_url" text,
 	"bio" text,

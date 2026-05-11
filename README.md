@@ -358,6 +358,7 @@ Recommended Core Tables
 1. Identity and authentication
 
 `users`
+
 - Purpose: root account record used by every other table.
 - Key columns:
   - `id`
@@ -368,6 +369,7 @@ Recommended Core Tables
   - `updated_at`
 
 `auth_identities`
+
 - Purpose: supports phone login, email login, and future OAuth without polluting `users`.
 - Key columns:
   - `id`
@@ -386,6 +388,7 @@ Recommended Core Tables
   - unique on non-null `phone_e164`
 
 `auth_otps`
+
 - Purpose: phone verification, password reset codes, login challenges.
 - Key columns:
   - `id`
@@ -398,6 +401,7 @@ Recommended Core Tables
   - `consumed_at`
 
 `user_sessions`
+
 - Purpose: refresh sessions, device tracking, logout everywhere, suspicious session handling.
 - Key columns:
   - `id`
@@ -413,10 +417,11 @@ Recommended Core Tables
 2. User profile and seller identity
 
 `user_profiles`
+
 - Purpose: public profile data used in chat, live rooms, seller profile, and reviews.
 - Key columns:
   - `user_id`
-  - `display_name`
+  - `full_name`
   - `username`
   - `avatar_url`
   - `bio`
@@ -425,6 +430,7 @@ Recommended Core Tables
   - `response_time_label`
 
 `seller_profiles`
+
 - Purpose: seller-only presentation and business information.
 - Key columns:
   - `user_id`
@@ -439,6 +445,7 @@ Recommended Core Tables
   - `completed_sales_count`
 
 `user_addresses`
+
 - Purpose: shipping addresses for buyers and pickup/warehouse addresses for sellers.
 - Key columns:
   - `id`
@@ -455,6 +462,7 @@ Recommended Core Tables
   - `is_default`
 
 `user_settings`
+
 - Purpose: notification preferences, privacy, reminder defaults, negotiation preferences.
 - Key columns:
   - `user_id`
@@ -468,6 +476,7 @@ Recommended Core Tables
 3. Catalog: products, services, categories, media
 
 `categories`
+
 - Purpose: marketplace grouping for products and services.
 - Key columns:
   - `id`
@@ -477,6 +486,7 @@ Recommended Core Tables
   - `kind` (`product`, `service`, `both`)
 
 `listings`
+
 - Purpose: shared base table for anything sellable in the app.
 - Key columns:
   - `id`
@@ -502,6 +512,7 @@ Recommended Core Tables
   - `listing_type + status`
 
 `listing_media`
+
 - Purpose: product images, videos, thumbnails, seller-uploaded live preview assets.
 - Key columns:
   - `id`
@@ -515,6 +526,7 @@ Recommended Core Tables
   - `duration_seconds`
 
 `listing_inventory`
+
 - Purpose: stock and availability for products.
 - Key columns:
   - `listing_id`
@@ -524,6 +536,7 @@ Recommended Core Tables
   - `allow_backorder`
 
 `listing_service_meta`
+
 - Purpose: extra service-specific metadata.
 - Key columns:
   - `listing_id`
@@ -534,6 +547,7 @@ Recommended Core Tables
 4. Discovery, follows, saves, and reminders
 
 `seller_follows`
+
 - Purpose: power seller follower counts and "notify followers" flows.
 - Key columns:
   - `seller_id`
@@ -543,6 +557,7 @@ Recommended Core Tables
   - unique on `seller_id + user_id`
 
 `saved_listings`
+
 - Purpose: saved deals in profile and quick return flows.
 - Key columns:
   - `user_id`
@@ -550,6 +565,7 @@ Recommended Core Tables
   - `created_at`
 
 `live_reminders`
+
 - Purpose: reserved live tickets / reminders for scheduled sessions.
 - Key columns:
   - `user_id`
@@ -561,6 +577,7 @@ Recommended Core Tables
   - unique on `user_id + session_id`
 
 `feed_impressions`
+
 - Purpose: ranking, personalization, and analytics.
 - Key columns:
   - `id`
@@ -574,6 +591,7 @@ Recommended Core Tables
 5. Live negotiation sessions
 
 `live_sessions`
+
 - Purpose: scheduled/live room entity shown in feed and seller dashboards.
 - Key columns:
   - `id`
@@ -608,6 +626,7 @@ Recommended Core Tables
   - `seller_id + status + scheduled_start_at`
 
 `live_session_listings`
+
 - Purpose: allows one live session to feature one or many products/services.
 - Key columns:
   - `session_id`
@@ -616,6 +635,7 @@ Recommended Core Tables
   - `is_primary`
 
 `live_session_participants`
+
 - Purpose: room membership, hand raise state, mute state, and accepted buyer list.
 - Key columns:
   - `id`
@@ -632,6 +652,7 @@ Recommended Core Tables
   - unique on `session_id + user_id`
 
 `live_session_media_assets`
+
 - Purpose: session-specific previews, posters, and demo video sources separate from listing media.
 - Key columns:
   - `id`
@@ -641,6 +662,7 @@ Recommended Core Tables
   - `metadata_json`
 
 `webrtc_peers`
+
 - Purpose: store transient metadata when needed for signaling audit and reconnect support.
 - Key columns:
   - `id`
@@ -655,6 +677,7 @@ Recommended Core Tables
 6. Negotiation and offer engine
 
 `negotiation_threads`
+
 - Purpose: each buyer gets a negotiation lane inside a live room or direct listing negotiation.
 - Key columns:
   - `id`
@@ -674,6 +697,7 @@ Recommended Core Tables
   - unique partial strategy for active buyer/session pair when desired
 
 `offers`
+
 - Purpose: immutable price actions inside a negotiation thread.
 - Key columns:
   - `id`
@@ -693,6 +717,7 @@ Recommended Core Tables
   - `session_id + created_at`
 
 `negotiation_events`
+
 - Purpose: append-only audit trail for timers, joins, unmute actions, accepts, declines, screenshots shared, etc.
 - Key columns:
   - `id`
@@ -704,12 +729,14 @@ Recommended Core Tables
   - `created_at`
 
 This separation is important:
+
 - `offers` are financial state changes.
 - `negotiation_events` are behavioral/audit events.
 
 7. Messaging and shared media
 
 `conversations`
+
 - Purpose: buyer-seller direct chat outside the live room, plus fallback negotiation chat.
 - Key columns:
   - `id`
@@ -724,6 +751,7 @@ This separation is important:
   - `last_message_at desc`
 
 `conversation_participants`
+
 - Purpose: membership and per-user conversation state.
 - Key columns:
   - `conversation_id`
@@ -734,6 +762,7 @@ This separation is important:
   - `is_muted`
 
 `messages`
+
 - Purpose: text, voice note, screenshot, product share, system notices.
 - Key columns:
   - `id`
@@ -752,6 +781,7 @@ This separation is important:
   - `conversation_id + created_at`
 
 `message_attachments`
+
 - Purpose: screenshots and media attachments linked to chat messages.
 - Key columns:
   - `id`
@@ -762,6 +792,7 @@ This separation is important:
   - `size_bytes`
 
 `message_receipts`
+
 - Purpose: sent/delivered/seen/read states shown in chat UI.
 - Key columns:
   - `message_id`
@@ -772,6 +803,7 @@ This separation is important:
 8. Commerce: checkout, deal closure, shipping, payout
 
 `orders`
+
 - Purpose: created only when a deal is accepted or instant buy succeeds.
 - Key columns:
   - `id`
@@ -790,6 +822,7 @@ This separation is important:
   - `created_at`
 
 `order_items`
+
 - Purpose: line items attached to the accepted deal.
 - Key columns:
   - `id`
@@ -801,6 +834,7 @@ This separation is important:
   - `total_price_amount`
 
 `payments`
+
 - Purpose: payment provider records and reconciliation.
 - Key columns:
   - `id`
@@ -814,6 +848,7 @@ This separation is important:
   - `raw_response_json`
 
 `shipments`
+
 - Purpose: delivery/pickup fulfillment tracking.
 - Key columns:
   - `id`
@@ -826,6 +861,7 @@ This separation is important:
   - `status`
 
 `seller_payouts`
+
 - Purpose: release seller funds after escrow or delivery confirmation.
 - Key columns:
   - `id`
@@ -839,6 +875,7 @@ This separation is important:
 9. Ratings, trust, verification, disputes
 
 `reviews`
+
 - Purpose: post-transaction buyer/seller ratings.
 - Key columns:
   - `id`
@@ -852,6 +889,7 @@ This separation is important:
   - one review per reviewer per order
 
 `verification_submissions`
+
 - Purpose: seller KYC/business verification.
 - Key columns:
   - `id`
@@ -863,6 +901,7 @@ This separation is important:
   - `reviewed_by`
 
 `reports`
+
 - Purpose: user reporting, content abuse, fraud flags, session incidents.
 - Key columns:
   - `id`
@@ -877,6 +916,7 @@ This separation is important:
   - `created_at`
 
 `blocks`
+
 - Purpose: hard user-level blocking for chat and session safety.
 - Key columns:
   - `blocker_user_id`
@@ -886,6 +926,7 @@ This separation is important:
 10. Notifications
 
 `notifications`
+
 - Purpose: in-app notification center.
 - Key columns:
   - `id`
@@ -901,6 +942,7 @@ This separation is important:
   - `user_id + read_at`
 
 `notification_deliveries`
+
 - Purpose: push/email/SMS delivery audit.
 - Key columns:
   - `id`
@@ -962,33 +1004,42 @@ orders
 How the Main App Features Map to the Schema
 
 `Authentication`
+
 - Login/signup by phone or email uses `users`, `auth_identities`, `auth_otps`, and `user_sessions`.
 
 `Seller profile page`
+
 - Pull from `user_profiles`, `seller_profiles`, `seller_follows`, `listings`, and `live_sessions`.
 
 `Market/product/service detail`
+
 - Pull from `listings`, `listing_media`, `categories`, and seller profile joins.
 
 `Live feed`
+
 - Pull from `live_sessions` joined with seller profile and primary listing.
 - Avoid expensive aggregate queries at request time by caching `viewer_count_cached`, `offer_count_cached`, `follower_count`, and `rating_avg`.
 
 `Join negotiation room`
+
 - Create/update `live_session_participants`.
 - Stream realtime state from websocket memory/Redis, but persist durable events to `negotiation_events`.
 
 `Offers and counter-offers`
+
 - Use `negotiation_threads` + immutable `offers`.
 - Accepted offer creates `orders` and locks thread/session outcome.
 
 `Messages`
+
 - Use `conversations`, `conversation_participants`, `messages`, `message_attachments`, and `message_receipts`.
 
 `Saved deals and reminders`
+
 - Use `saved_listings` and `live_reminders`.
 
 `Analytics dashboard`
+
 - Start with cached counts on `seller_profiles`, `listings`, and `live_sessions`.
 - Add warehouse/event pipelines later if deeper analytics is needed.
 

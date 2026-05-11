@@ -11,14 +11,14 @@ import usersRouter from "./users";
 import webrtcRouter from "./webrtc";
 
 export const registerRoutes = (app: Express) => {
-  app.use("/api/auth", authRouter);
-  app.use("/api/users", usersRouter);
-  app.use("/api/catalog", catalogRouter);
-  app.use("/api/sessions", sessionsRouter);
-  app.use("/api/offers", offersRouter);
-  app.use("/api/conversations", conversationsRouter);
-  app.use("/api/orders", ordersRouter);
-  app.use("/api/notifications", notificationsRouter);
-  app.use("/api/trust", trustRouter);
-  app.use("/api/webrtc", webrtcRouter);
+  app.use("/api/v1/auth", authRouter);
+  app.use("/api/v1/users", usersRouter);
+  app.use("/api/v1/catalog", catalogRouter);
+  app.use("/api/v1/sessions", sessionsRouter);
+  app.use("/api/v1/offers", offersRouter);
+  app.use("/api/v1/conversations", conversationsRouter);
+  app.use("/api/v1/orders", ordersRouter);
+  app.use("/api/v1/notifications", notificationsRouter);
+  app.use("/api/v1/trust", trustRouter);
+  app.use("/api/v1/webrtc", webrtcRouter);
 };

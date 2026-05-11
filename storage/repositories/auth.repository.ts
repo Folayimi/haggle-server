@@ -202,7 +202,7 @@ export class AuthRepository extends BaseRepository {
     if (phone_existing.length > 0) {
       return "Account with this device already exists";
     } else if (email_existing.length > 0) {
-      return "Email already in use";
+      return "Account with this email already exists";
     }
     return null;
   }

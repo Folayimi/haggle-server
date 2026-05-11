@@ -38,8 +38,7 @@ router.post("/signup", async (req: Request, res: Response) => {
 
     if (phoneOrEmailExists) {
       return res.status(409).json({ error: phoneOrEmailExists });
-    }
-    {
+    } else {
       console.log("No existing user with provided email or phone");
     }
 

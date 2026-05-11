@@ -23,15 +23,17 @@ router.post("/signup", async (req: Request, res: Response) => {
       response_time_label?: string;
     };
 
-    if (!body.full_name || !body.username || !body.password) {
+    if (!body.full_name || !body.email || !body.password) {
       return res
         .status(400)
-        .json({ error: "full_name, username, and password are required" });
+        .json({ error: "full_name, email, and password are required" });
     }
+
+    console.log("Creating user account with data:", body);
 
     const user = await authRepository.createUserAccount({
       full_name: body.full_name,
-      username: body.username,
+      username: body.username ? body.username : body.email.split("@")[0],
       primary_role: body.primary_role as never,
       status: body.status as never,
       email: body.email,

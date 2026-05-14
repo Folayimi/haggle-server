@@ -190,7 +190,7 @@ export class AuthRepository extends BaseRepository {
       emailquery.where(eq(authIdentities.email, email));
     }
 
-    const phonequery = this.database.select().from(authIdentities);
+    // const phonequery = this.database.select().from(authIdentities);
 
     // if (phone_e164) {
     //   phonequery.where(eq(authIdentities.phone_e164, phone_e164));

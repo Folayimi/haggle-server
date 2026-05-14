@@ -33,7 +33,7 @@ router.post("/signup", async (req: Request, res: Response) => {
 
     const phoneOrEmailExists = await authRepository.checkPhoneOrEmailExists(
       body.email,
-      body.phone_e164,
+      // body.phone_e164,
     );
 
     if (phoneOrEmailExists) {

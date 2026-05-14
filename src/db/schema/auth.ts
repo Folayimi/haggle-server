@@ -107,12 +107,12 @@ export const authIdentities = pgTable(
         // Only enforce uniqueness for non-null emails
         sql`"email" IS NOT NULL`,
       ),
-    phoneUnique: uniqueIndex("auth_identities_phone_unique")
-      .on(table.phone_e164)
-      .where(
-        // Only enforce uniqueness for non-null phone numbers
-        sql`"phone_e164" IS NOT NULL`,
-      ),
+    // phoneUnique: uniqueIndex("auth_identities_phone_unique")
+    //   .on(table.phone_e164)
+    //   .where(
+    //     // Only enforce uniqueness for non-null phone numbers
+    //     sql`"phone_e164" IS NOT NULL`,
+    //   ),
   }),
 );
 

@@ -143,10 +143,10 @@ router.post("/login", async (req: Request, res: Response) => {
     }
 
     // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user.id);
+    const { accessToken, refreshToken } = generateTokens(user.user_id);
 
     // Create session in database
-    const session = await createSession(user.id, refreshToken);
+    const session = await createSession(user.user_id, refreshToken);
 
     // If you want to track device info, update the session with device details
     // if (body.device_name || body.platform) {
@@ -163,7 +163,7 @@ router.post("/login", async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "Login successful",
-      ...user,
+      user,
       tokens: {
         accessToken,
         refreshToken,

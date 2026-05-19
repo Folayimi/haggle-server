@@ -24,6 +24,13 @@ export {
   type SelectUserSession,
 } from "./auth";
 
+// Auth Sessions
+export {
+  authSessions,
+  type InsertAuthSession,
+  type SelectAuthSession,
+} from "./auth-sessions";
+
 // User Profiles
 export {
   userProfiles,

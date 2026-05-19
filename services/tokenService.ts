@@ -1,0 +1,162 @@
+import jwt from "jsonwebtoken";
+import { db } from "../src/db/db";
+import { authSessions } from "../src/db/schema/auth-sessions";
+import { eq, and, isNull, lt } from "drizzle-orm";
+import { config } from "dotenv";
+
+config({ path: ".env" });
+
+// Types
+interface TokenPayload {
+  userId: string;
+  type: "access" | "refresh";
+}
+
+interface Tokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+interface Session {
+  id: string;
+  userId: string;
+  refreshToken: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+}
+
+// Validate required environment variables on startup
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "15m";
+const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY || "7d";
+
+if (!JWT_ACCESS_SECRET || !JWT_REFRESH_SECRET) {
+  throw new Error(
+    "Missing required environment variables: JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be defined",
+  );
+}
+
+// Warn if using default expiry values in production
+if (process.env.NODE_ENV === "production") {
+  if (ACCESS_TOKEN_EXPIRY === "15m" && !process.env.ACCESS_TOKEN_EXPIRY) {
+    console.warn("Warning: ACCESS_TOKEN_EXPIRY not set, using default 15m");
+  }
+  if (REFRESH_TOKEN_EXPIRY === "7d" && !process.env.REFRESH_TOKEN_EXPIRY) {
+    console.warn("Warning: REFRESH_TOKEN_EXPIRY not set, using default 7d");
+  }
+}
+
+// Generate tokens
+export const generateTokens = (userId: string): Tokens => {
+  // Changed: userId must be string, not undefined
+  const accessToken = jwt.sign({ userId, type: "access" }, JWT_ACCESS_SECRET, {
+    expiresIn: ACCESS_TOKEN_EXPIRY as jwt.SignOptions["expiresIn"],
+  });
+
+  const refreshToken = jwt.sign(
+    { userId, type: "refresh" },
+    JWT_REFRESH_SECRET,
+    { expiresIn: REFRESH_TOKEN_EXPIRY as jwt.SignOptions["expiresIn"] },
+  );
+
+  return { accessToken, refreshToken };
+};
+
+export const verifyAccessToken = (token: string): { userId: string } => {
+  try {
+    const decoded = jwt.verify(token, JWT_ACCESS_SECRET) as TokenPayload;
+    if (decoded.type !== "access") {
+      throw new Error("Invalid token type");
+    }
+    return { userId: decoded.userId };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Create session (store refresh token in database)
+export const createSession = async (
+  userId: string,
+  refreshToken: string,
+): Promise<Session> => {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7); // 7 days, match REFRESH_TOKEN_EXPIRY
+
+  const [session] = await db
+    .insert(authSessions)
+    .values({
+      user_id: userId,
+      refresh_token: refreshToken,
+      expires_at: expiresAt,
+    })
+    .returning();
+
+  return {
+    id: session.id,
+    userId: session.user_id,
+    refreshToken: session.refresh_token,
+    expiresAt: session.expires_at,
+    revokedAt: session.revoked_at,
+  };
+};
+
+// Verify refresh token
+export const verifyRefreshToken = async (
+  refreshToken: string,
+): Promise<{ userId: string; sessionId: string }> => {
+  try {
+    const decoded = jwt.verify(
+      refreshToken,
+      JWT_REFRESH_SECRET,
+    ) as TokenPayload;
+
+    const [session] = await db
+      .select()
+      .from(authSessions)
+      .where(
+        and(
+          eq(authSessions.refresh_token, refreshToken),
+          eq(authSessions.user_id, decoded.userId),
+          isNull(authSessions.revoked_at),
+        ),
+      )
+      .limit(1);
+
+    if (!session) {
+      throw new Error("Invalid session");
+    }
+
+    if (new Date() > session.expires_at) {
+      throw new Error("Session expired");
+    }
+
+    return {
+      userId: decoded.userId,
+      sessionId: session.id,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Revoke session (logout)
+export const revokeSession = async (refreshToken: string): Promise<void> => {
+  await db
+    .update(authSessions)
+    .set({ revoked_at: new Date() })
+    .where(eq(authSessions.refresh_token, refreshToken));
+};
+
+// Revoke all user sessions
+export const revokeAllUserSessions = async (userId: string): Promise<void> => {
+  await db
+    .update(authSessions)
+    .set({ revoked_at: new Date() })
+    .where(eq(authSessions.user_id, userId));
+};
+
+// Clean up expired sessions (run via cron job)
+export const cleanupExpiredSessions = async (): Promise<void> => {
+  await db.delete(authSessions).where(lt(authSessions.expires_at, new Date()));
+};

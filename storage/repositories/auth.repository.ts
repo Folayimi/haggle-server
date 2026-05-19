@@ -174,6 +174,27 @@ export class AuthRepository extends BaseRepository {
     return session ?? null;
   }
 
+  async findUserByEmail(email?: string) {
+    if (!email) {
+      return null;
+    }
+
+    const [user] = await this.database
+      .select()
+      .from(authIdentities)
+      .where(eq(authIdentities.email, email));
+
+    return user ?? null;
+  }
+
+  async findUserById(userId: string) {
+    const [user] = await this.database
+      .select()
+      .from(users)
+      .where(eq(users.id, userId));
+    return user ?? null;
+  }
+
   async checkPhoneOrEmailExists(
     email?: string,
     // phone_e164?: string,

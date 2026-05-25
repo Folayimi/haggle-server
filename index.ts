@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
+import { startEmailVerificationCleanupJob } from './jobs/emailVerificationCleanup';
 import { registerRoutes } from './routes/routes';
 
 const app = express();
@@ -15,6 +16,7 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // Register all routes
 registerRoutes(app);
+startEmailVerificationCleanupJob();
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);

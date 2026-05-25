@@ -45,6 +45,11 @@ export const OTPPurpose = {
   VERIFY_CONTACT: "verify_contact",
 } as const;
 
+export const EmailVerificationType = {
+  WEB_LINK: "web_link",
+  APP_OTP: "app_otp",
+} as const;
+
 // Listing and catalog
 export const ListingType = {
   PRODUCT: "product",

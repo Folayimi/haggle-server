@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { authRepository } from "../storage";
 import bcrypt from "bcrypt";
+import { z } from "zod";
 import {
   generateTokens,
   createSession,
@@ -9,8 +10,37 @@ import {
   revokeAllUserSessions,
   verifyAccessToken,
 } from "../services/tokenService";
+import { sendAppOtpEmail, sendWebVerificationEmail } from "../services/email";
+import {
+  buildVerificationUrl,
+  EMAIL_VERIFICATION_EXPIRY_MINUTES,
+  generateSixDigitOtp,
+  generateVerificationJwt,
+  getRateLimitWindowMs,
+  getVerificationExpiryDate,
+  verifyVerificationJwt,
+} from "../services/emailVerification";
+import { EmailVerificationType } from "../src/db/schema";
 
 const router = Router();
+const MAX_VERIFICATION_REQUESTS_PER_WINDOW = 3;
+
+const sendVerificationSchema = z.object({
+  email: z.string().trim().email(),
+  type: z.enum(["web", "app"]),
+});
+
+const verifyWebSchema = z.object({
+  token: z.string().trim().min(1),
+});
+
+const verifyOtpSchema = z.object({
+  email: z.string().trim().email(),
+  otp_code: z.string().regex(/^\d{6}$/),
+});
+
+const getValidationErrorResponse = (error: z.ZodError) =>
+  error.issues.map((issue) => issue.message).join(", ");
 
 router.post("/signup", async (req: Request, res: Response) => {
   try {
@@ -315,6 +345,212 @@ router.get("/me", async (req: Request, res: Response) => {
     console.error("Get user error:", error);
     return res.status(500).json({
       error: "Failed to get user data",
+    });
+  }
+});
+
+router.post("/send-verification", async (req: Request, res: Response) => {
+  const parsedBody = sendVerificationSchema.safeParse(req.body);
+
+  if (!parsedBody.success) {
+    return res.status(400).json({
+      error: getValidationErrorResponse(parsedBody.error),
+    });
+  }
+
+  const { email, type } = parsedBody.data;
+
+  try {
+    const identity = await authRepository.findPrimaryEmailIdentityByEmail(email);
+
+    if (!identity) {
+      return res.status(404).json({
+        error: "No account found for this email",
+      });
+    }
+
+    if (identity.verified_at) {
+      return res.status(400).json({
+        error: "Email is already verified",
+      });
+    }
+
+    const rateLimitWindowMs = getRateLimitWindowMs();
+    const windowStart = new Date(Date.now() - rateLimitWindowMs);
+    const recentRequests =
+      await authRepository.countRecentEmailVerificationRequests(
+        email,
+        windowStart,
+      );
+
+    if (recentRequests >= MAX_VERIFICATION_REQUESTS_PER_WINDOW) {
+      return res.status(429).json({
+        error: "Too many verification requests. Please try again later.",
+      });
+    }
+
+    const expiresAt = getVerificationExpiryDate();
+    const verificationRecord =
+      type === "web"
+        ? await authRepository.createEmailVerification({
+            email,
+            expires_at: expiresAt,
+            token: generateVerificationJwt(identity.user_id, email),
+            type: EmailVerificationType.WEB_LINK,
+            user_id: identity.user_id,
+          })
+        : await authRepository.createEmailVerification({
+            email,
+            expires_at: expiresAt,
+            otp_code: generateSixDigitOtp(),
+            type: EmailVerificationType.APP_OTP,
+            user_id: identity.user_id,
+          });
+
+    try {
+      const supportEmail = process.env.EMAIL_USER ?? "";
+
+      if (type === "web") {
+        await sendWebVerificationEmail({
+          email,
+          expiresInMinutes: EMAIL_VERIFICATION_EXPIRY_MINUTES,
+          supportEmail,
+          verificationUrl: buildVerificationUrl(verificationRecord.token ?? ""),
+        });
+      } else {
+        await sendAppOtpEmail({
+          email,
+          expiresInMinutes: EMAIL_VERIFICATION_EXPIRY_MINUTES,
+          otpCode: verificationRecord.otp_code ?? "",
+          supportEmail,
+        });
+      }
+    } catch (emailError) {
+      await authRepository.deleteEmailVerification(verificationRecord.id);
+      console.error("Failed to send verification email", {
+        email,
+        error: emailError,
+        type,
+      });
+
+      return res.status(500).json({
+        error: "Failed to send verification email",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Verification email sent successfully",
+      success: true,
+    });
+  } catch (error) {
+    console.error("Send verification error", { email, error, type });
+    return res.status(500).json({
+      error: "Failed to send verification email",
+    });
+  }
+});
+
+router.post("/verify-web", async (req: Request, res: Response) => {
+  const parsedBody = verifyWebSchema.safeParse(req.body);
+
+  if (!parsedBody.success) {
+    return res.status(400).json({
+      error: getValidationErrorResponse(parsedBody.error),
+    });
+  }
+
+  const { token } = parsedBody.data;
+
+  try {
+    const payload = verifyVerificationJwt(token);
+    const verification =
+      await authRepository.findActiveWebVerificationByToken(token);
+
+    if (!verification || verification.expires_at <= new Date()) {
+      return res.status(400).json({
+        error: "Invalid or expired verification token",
+      });
+    }
+
+    if (verification.user_id !== payload.sub || verification.email !== payload.email) {
+      return res.status(400).json({
+        error: "Invalid verification token",
+      });
+    }
+
+    const markedVerification = await authRepository.markEmailVerificationVerified(
+      verification.id,
+    );
+
+    if (!markedVerification) {
+      return res.status(400).json({
+        error: "Verification token has already been used",
+      });
+    }
+
+    await authRepository.markEmailIdentityVerified(
+      verification.user_id,
+      verification.email,
+    );
+
+    return res.status(200).json({
+      message: "Email verified successfully",
+      success: true,
+    });
+  } catch (error) {
+    console.error("Verify web email error", { error });
+    return res.status(400).json({
+      error: "Invalid or expired verification token",
+    });
+  }
+});
+
+router.post("/verify-otp", async (req: Request, res: Response) => {
+  const parsedBody = verifyOtpSchema.safeParse(req.body);
+
+  if (!parsedBody.success) {
+    return res.status(400).json({
+      error: getValidationErrorResponse(parsedBody.error),
+    });
+  }
+
+  const { email, otp_code: otpCode } = parsedBody.data;
+
+  try {
+    const verification = await authRepository.findActiveOtpVerification(
+      email,
+      otpCode,
+    );
+
+    if (!verification || verification.expires_at <= new Date()) {
+      return res.status(400).json({
+        error: "Invalid or expired OTP",
+      });
+    }
+
+    const markedVerification = await authRepository.markEmailVerificationVerified(
+      verification.id,
+    );
+
+    if (!markedVerification) {
+      return res.status(400).json({
+        error: "OTP has already been used",
+      });
+    }
+
+    await authRepository.markEmailIdentityVerified(
+      verification.user_id,
+      verification.email,
+    );
+
+    return res.status(200).json({
+      message: "Email verified successfully",
+      success: true,
+    });
+  } catch (error) {
+    console.error("Verify OTP error", { email, error });
+    return res.status(500).json({
+      error: "Failed to verify OTP",
     });
   }
 });

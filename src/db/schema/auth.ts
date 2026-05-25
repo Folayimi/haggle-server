@@ -20,6 +20,7 @@ import {
 import { sql } from "drizzle-orm";
 import {
   AuthProvider,
+  EmailVerificationType,
   OTPChannel,
   OTPPurpose,
   UserPrimaryRole,
@@ -152,6 +153,40 @@ export const authOtps = pgTable(
 );
 
 /**
+ * EMAIL_VERIFICATIONS TABLE
+ * Supports web link verification and app OTP verification.
+ */
+export const emailVerifications = pgTable(
+  "email_verifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    user_id: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    token: text("token"),
+    otp_code: text("otp_code"),
+    type: text("type", {
+      enum: enumValues(EmailVerificationType),
+    }).notNull(),
+    expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
+    verified_at: timestamp("verified_at", { withTimezone: true }),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index("email_verifications_user_id_idx").on(table.user_id),
+    emailIdx: index("email_verifications_email_idx").on(table.email),
+    tokenIdx: index("email_verifications_token_idx").on(table.token),
+    otpCodeIdx: index("email_verifications_otp_code_idx").on(table.otp_code),
+    expiresAtIdx: index("email_verifications_expires_at_idx").on(
+      table.expires_at,
+    ),
+  }),
+);
+
+/**
  * USER_SESSIONS TABLE
  * Manages user sessions for:
  * - Refresh token storage
@@ -193,6 +228,9 @@ export type SelectAuthIdentity = typeof authIdentities.$inferSelect;
 
 export type InsertAuthOtp = typeof authOtps.$inferInsert;
 export type SelectAuthOtp = typeof authOtps.$inferSelect;
+
+export type InsertEmailVerification = typeof emailVerifications.$inferInsert;
+export type SelectEmailVerification = typeof emailVerifications.$inferSelect;
 
 export type InsertUserSession = typeof userSessions.$inferInsert;
 export type SelectUserSession = typeof userSessions.$inferSelect;

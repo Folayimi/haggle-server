@@ -13,6 +13,7 @@ export {
   users,
   authIdentities,
   authOtps,
+  emailVerifications,
   userSessions,
   type InsertUser,
   type SelectUser,
@@ -20,6 +21,8 @@ export {
   type SelectAuthIdentity,
   type InsertAuthOtp,
   type SelectAuthOtp,
+  type InsertEmailVerification,
+  type SelectEmailVerification,
   type InsertUserSession,
   type SelectUserSession,
 } from "./auth";

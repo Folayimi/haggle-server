@@ -1,12 +1,14 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, lte } from "drizzle-orm";
 import { BaseRepository } from "./base.repository";
 import {
   authIdentities,
   authOtps,
+  emailVerifications,
   userSessions,
   users,
   type InsertAuthIdentity,
   type InsertAuthOtp,
+  type InsertEmailVerification,
   type InsertUserSession,
 } from "../../src/db/schema/auth";
 import {
@@ -14,7 +16,12 @@ import {
   userSettings,
   type InsertUserProfile,
 } from "../../src/db/schema/users";
-import { AuthProvider, UserPrimaryRole, UserStatus } from "../../src/db/schema";
+import {
+  AuthProvider,
+  EmailVerificationType,
+  UserPrimaryRole,
+  UserStatus,
+} from "../../src/db/schema";
 
 export interface CreateUserAccountInput {
   full_name: string;
@@ -129,6 +136,21 @@ export class AuthRepository extends BaseRepository {
     return result[0] ?? null;
   }
 
+  async findPrimaryEmailIdentityByEmail(email: string) {
+    const result = await this.database
+      .select()
+      .from(authIdentities)
+      .where(
+        and(
+          eq(authIdentities.email, email),
+          eq(authIdentities.provider, AuthProvider.EMAIL),
+          eq(authIdentities.is_primary, true),
+        ),
+      );
+
+    return result[0] ?? null;
+  }
+
   async createOtp(input: InsertAuthOtp) {
     const [otp] = await this.database
       .insert(authOtps)
@@ -228,5 +250,108 @@ export class AuthRepository extends BaseRepository {
       return "Account with this email already exists";
     }
     return null;
+  }
+
+  async countRecentEmailVerificationRequests(email: string, since: Date) {
+    const [result] = await this.database
+      .select({ count: count() })
+      .from(emailVerifications)
+      .where(
+        and(
+          eq(emailVerifications.email, email),
+          gt(emailVerifications.created_at, since),
+        ),
+      );
+
+    return result?.count ?? 0;
+  }
+
+  async createEmailVerification(input: InsertEmailVerification) {
+    const [verification] = await this.database
+      .insert(emailVerifications)
+      .values(input)
+      .returning();
+
+    return verification;
+  }
+
+  async deleteEmailVerification(id: string) {
+    const [verification] = await this.database
+      .delete(emailVerifications)
+      .where(eq(emailVerifications.id, id))
+      .returning();
+
+    return verification ?? null;
+  }
+
+  async findActiveWebVerificationByToken(token: string) {
+    const result = await this.database
+      .select()
+      .from(emailVerifications)
+      .where(
+        and(
+          eq(emailVerifications.token, token),
+          eq(emailVerifications.type, EmailVerificationType.WEB_LINK),
+          isNull(emailVerifications.verified_at),
+        ),
+      );
+
+    return result[0] ?? null;
+  }
+
+  async findActiveOtpVerification(email: string, otpCode: string) {
+    const result = await this.database
+      .select()
+      .from(emailVerifications)
+      .where(
+        and(
+          eq(emailVerifications.email, email),
+          eq(emailVerifications.otp_code, otpCode),
+          eq(emailVerifications.type, EmailVerificationType.APP_OTP),
+          isNull(emailVerifications.verified_at),
+        ),
+      );
+
+    return result[0] ?? null;
+  }
+
+  async markEmailVerificationVerified(id: string) {
+    const [verification] = await this.database
+      .update(emailVerifications)
+      .set({ verified_at: new Date() })
+      .where(
+        and(eq(emailVerifications.id, id), isNull(emailVerifications.verified_at)),
+      )
+      .returning();
+
+    return verification ?? null;
+  }
+
+  async markEmailIdentityVerified(userId: string, email: string) {
+    const [identity] = await this.database
+      .update(authIdentities)
+      .set({ verified_at: new Date() })
+      .where(
+        and(
+          eq(authIdentities.user_id, userId),
+          eq(authIdentities.email, email),
+          eq(authIdentities.provider, AuthProvider.EMAIL),
+        ),
+      )
+      .returning();
+
+    return identity ?? null;
+  }
+
+  async deleteExpiredEmailVerifications(now: Date) {
+    return this.database
+      .delete(emailVerifications)
+      .where(
+        and(
+          lte(emailVerifications.expires_at, now),
+          isNull(emailVerifications.verified_at),
+        ),
+      )
+      .returning();
   }
 }

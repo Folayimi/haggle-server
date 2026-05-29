@@ -361,7 +361,8 @@ router.post("/send-verification", async (req: Request, res: Response) => {
   const { email, type } = parsedBody.data;
 
   try {
-    const identity = await authRepository.findPrimaryEmailIdentityByEmail(email);
+    const identity =
+      await authRepository.findPrimaryEmailIdentityByEmail(email);
 
     if (!identity) {
       return res.status(404).json({
@@ -439,7 +440,10 @@ router.post("/send-verification", async (req: Request, res: Response) => {
     }
 
     return res.status(200).json({
-      message: "Verification email sent successfully",
+      message:
+        type === "web"
+          ? "Verification link successfully sent to your email"
+          : "OTP successfully sent to your email",
       success: true,
     });
   } catch (error) {
@@ -472,15 +476,17 @@ router.post("/verify-web", async (req: Request, res: Response) => {
       });
     }
 
-    if (verification.user_id !== payload.sub || verification.email !== payload.email) {
+    if (
+      verification.user_id !== payload.sub ||
+      verification.email !== payload.email
+    ) {
       return res.status(400).json({
         error: "Invalid verification token",
       });
     }
 
-    const markedVerification = await authRepository.markEmailVerificationVerified(
-      verification.id,
-    );
+    const markedVerification =
+      await authRepository.markEmailVerificationVerified(verification.id);
 
     if (!markedVerification) {
       return res.status(400).json({
@@ -528,9 +534,8 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
       });
     }
 
-    const markedVerification = await authRepository.markEmailVerificationVerified(
-      verification.id,
-    );
+    const markedVerification =
+      await authRepository.markEmailVerificationVerified(verification.id);
 
     if (!markedVerification) {
       return res.status(400).json({

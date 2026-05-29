@@ -100,8 +100,11 @@ const sendEmailWithRetry = async (payload: EmailPayload) => {
       logEmailAttempt(payload, attempt);
 
       const transporter = getEmailTransport();
+      const fromAddress =
+        process.env.EMAIL_FROM ||
+        `"Haggle Team" <${getRequiredEnv("EMAIL_USER")}>`;
       const info = await transporter.sendMail({
-        from: getRequiredEnv("EMAIL_USER"),
+        from: fromAddress,
         html: payload.html,
         subject: payload.subject,
         text: payload.text,

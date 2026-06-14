@@ -43,6 +43,13 @@
       "when": 1779710969986,
       "tag": "0005_tricky_bruce_banner",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781132915348,
+      "tag": "0006_bright_jack_power",
+      "breakpoints": true
     }
   ]
 }

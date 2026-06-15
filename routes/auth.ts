@@ -86,7 +86,7 @@ router.post("/signup", async (req: Request, res: Response) => {
       primary_role: body.primary_role as never,
       status: body.status as never,
       email: body.email,
-      phone_e164: body.phone_e164? body.phone_e164 : '',
+      phone_e164: body.phone_e164 ? body.phone_e164 : "",
       password_hash:
         body.password && body.password.length > 0
           ? await bcrypt.hash(body.password, 10)
@@ -110,13 +110,18 @@ router.post("/signup", async (req: Request, res: Response) => {
     // Create session in database
     await createSession(user?.profile?.user_id ?? "", refreshToken);
 
+    await authRepository.sendVerificationOTP(
+      body?.email,
+      MAX_VERIFICATION_REQUESTS_PER_WINDOW,
+    );
+
     return res.status(201).json({
       ...user,
       tokens: {
         accessToken,
         refreshToken,
       },
-      message: "User account created successfully",
+      message: "Verificaition Code sent to your email",
       success: true,
     });
   } catch (error) {
@@ -522,6 +527,12 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
 
   const { email, otp_code: otpCode } = parsedBody.data;
 
+  if (!email || !otpCode){
+    return res.status(400).json({
+      error: "email and otpCode is required!"
+    })
+  }
+
   try {
     const verification = await authRepository.findActiveOtpVerification(
       email,
@@ -549,7 +560,7 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
     );
 
     return res.status(200).json({
-      message: "Email verified successfully",
+      message: "Email verified! Your Account has been created.",
       success: true,
     });
   } catch (error) {

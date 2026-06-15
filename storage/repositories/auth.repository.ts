@@ -22,6 +22,9 @@ import {
   UserPrimaryRole,
   UserStatus,
 } from "../../src/db/schema";
+import { error } from "node:console";
+import { EMAIL_VERIFICATION_EXPIRY_MINUTES, generateSixDigitOtp, generateVerificationJwt, getRateLimitWindowMs, getVerificationExpiryDate } from "../../services/emailVerification";
+import { sendAppOtpEmail } from "../../services/email";
 
 export interface CreateUserAccountInput {
   full_name: string;
@@ -217,6 +220,60 @@ export class AuthRepository extends BaseRepository {
     return user ?? null;
   }
 
+  async sendVerificationOTP(email: string, maxVerificationRequest: number) {
+    try {
+      const identity = await this.findPrimaryEmailIdentityByEmail(email);
+
+      if (!identity) {
+        throw error("No account found for this email");
+      }
+
+      if (identity.verified_at) {
+        throw error("Email is already verifie");
+      }
+
+      const rateLimitWindowMs = getRateLimitWindowMs();
+      const windowStart = new Date(Date.now() - rateLimitWindowMs);
+      const recentRequests = await this.countRecentEmailVerificationRequests(
+        email,
+        windowStart,
+      );
+
+      if (recentRequests >= maxVerificationRequest) {
+        throw error('Too many verification requests. Please try again later.')
+      }
+
+      const expiresAt = getVerificationExpiryDate();
+      const verificationRecord = await this.createEmailVerification({
+              email,
+              expires_at: expiresAt,
+              otp_code: generateSixDigitOtp(),
+              type: EmailVerificationType.APP_OTP,
+              user_id: identity.user_id,
+            });
+
+      try {
+        const supportEmail = process.env.EMAIL_USER ?? "";
+
+        await sendAppOtpEmail({
+            email,
+            expiresInMinutes: EMAIL_VERIFICATION_EXPIRY_MINUTES,
+            otpCode: verificationRecord.otp_code ?? "",
+            supportEmail,
+          });
+      } catch (emailError) {
+        await this.deleteEmailVerification(verificationRecord.id);
+        console.error("Failed to send verification email", {
+          email,
+          error: emailError,
+        });
+      }
+    } catch (err) {
+      console.error("Send verification error", { email, err });
+      throw error('Failed to send verification email', err)
+    }
+  }
+
   async checkPhoneOrEmailExists(
     email?: string,
     // phone_e164?: string,
@@ -320,7 +377,10 @@ export class AuthRepository extends BaseRepository {
       .update(emailVerifications)
       .set({ verified_at: new Date() })
       .where(
-        and(eq(emailVerifications.id, id), isNull(emailVerifications.verified_at)),
+        and(
+          eq(emailVerifications.id, id),
+          isNull(emailVerifications.verified_at),
+        ),
       )
       .returning();
 

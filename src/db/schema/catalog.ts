@@ -38,10 +38,9 @@ export const categories = pgTable(
   "categories",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    parent_id: uuid("parent_id"),
-    // .references(() => categories.id, {
-    //   onDelete: "set null",
-    // }),
+    parent_id: uuid("parent_id").references(():any => categories.id, {
+      onDelete: "set null",
+    }),
     name: text("name").notNull(),
     slug: text("slug").notNull().unique(),
     kind: text("kind", {

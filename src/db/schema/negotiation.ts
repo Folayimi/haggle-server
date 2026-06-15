@@ -139,10 +139,9 @@ export const offers = pgTable(
     sequence_no: integer("sequence_no").notNull(),
 
     // Linked to parent offer (for counter-offers)
-    parent_offer_id: uuid("parent_offer_id"),
-    // .references(() => offers.id, {
-    //   onDelete: "set null",
-    // }),
+    parent_offer_id: uuid("parent_offer_id").references(():any => offers.id, {
+      onDelete: "set null",
+    }),
 
     // Expiration for time-limited offers
     expires_at: timestamp("expires_at", { withTimezone: true }),

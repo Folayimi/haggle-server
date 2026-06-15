@@ -1,0 +1,2 @@
+ALTER TABLE "categories" ADD CONSTRAINT "categories_parent_id_categories_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."categories"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "offers" ADD CONSTRAINT "offers_parent_offer_id_offers_id_fk" FOREIGN KEY ("parent_offer_id") REFERENCES "public"."offers"("id") ON DELETE set null ON UPDATE no action;

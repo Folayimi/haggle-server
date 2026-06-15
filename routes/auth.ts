@@ -45,13 +45,13 @@ const getValidationErrorResponse = (error: z.ZodError) =>
 router.post("/signup", async (req: Request, res: Response) => {
   try {
     const body = req.body as {
-      full_name?: string;
+      full_name: string;
       username?: string;
       primary_role?: string;
       status?: string;
       email?: string;
       phone_e164?: string;
-      password?: string;
+      password: string;
       provider?: string;
       provider_uid?: string;
       avatar_url?: string;

@@ -86,7 +86,7 @@ router.post("/signup", async (req: Request, res: Response) => {
       primary_role: body.primary_role as never,
       status: body.status as never,
       email: body.email,
-      phone_e164: body.phone_e164,
+      phone_e164: body.phone_e164? body.phone_e164 : '',
       password_hash:
         body.password && body.password.length > 0
           ? await bcrypt.hash(body.password, 10)
@@ -193,11 +193,11 @@ router.post("/login", async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "Login successful",
-      user,
-      tokens: {
-        accessToken,
-        refreshToken,
-      },
+      // user,
+      // tokens: {
+      //   accessToken,
+      //   refreshToken,
+      // },
       session: {
         id: session.id,
         expiresAt: session.expiresAt,

@@ -14,6 +14,7 @@ export {
   authIdentities,
   authOtps,
   emailVerifications,
+  resetEmailVerifications,
   userSessions,
   type InsertUser,
   type SelectUser,
@@ -23,13 +24,15 @@ export {
   type SelectAuthOtp,
   type InsertEmailVerification,
   type SelectEmailVerification,
+  type InsertResetEmailVerification,
+  type SelectResetEmailVerification,
   type InsertUserSession,
   type SelectUserSession,
 } from "./auth";
 
 // Auth Sessions
 export {
-  authSessions,
+  authSessions,  
   type InsertAuthSession,
   type SelectAuthSession,
 } from "./auth-sessions";

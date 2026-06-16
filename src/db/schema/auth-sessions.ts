@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp, uuid, index } from "drizzle-orm/pg-core";
-import { users } from "./auth";
+import { users, resetEmailVerifications } from "./auth";
 
 /**
  * AUTH_SESSIONS TABLE
@@ -31,6 +31,7 @@ export const authSessions = pgTable(
     expiresAtIdx: index("auth_sessions_expires_at_idx").on(table.expires_at),
   }),
 );
+
 
 // Type inference
 export type InsertAuthSession = typeof authSessions.$inferInsert;

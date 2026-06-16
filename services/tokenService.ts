@@ -1,15 +1,18 @@
 import jwt from "jsonwebtoken";
 import { db } from "../src/db/db";
-import { authSessions } from "../src/db/schema/auth-sessions";
+import {
+  authSessions,  
+} from "../src/db/schema/auth-sessions";
 import { eq, and, isNull, lt } from "drizzle-orm";
 import { config } from "dotenv";
+import { userSessions } from "../src/db/schema";
 
 config({ path: ".env" });
 
 // Types
 interface TokenPayload {
   userId: string;
-  type: "access" | "refresh";
+  type: "access" | "refresh" | "reset";
 }
 
 interface Tokens {
@@ -17,10 +20,22 @@ interface Tokens {
   refreshToken: string;
 }
 
+interface ResetToken {
+  resetToken: string;
+}
+
 interface Session {
   id: string;
   userId: string;
   refreshToken: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+}
+
+interface ResetSession {
+  id: string;
+  verificationId: string;
+  resetToken: string;
   expiresAt: Date;
   revokedAt: Date | null;
 }
@@ -75,13 +90,63 @@ export const verifyAccessToken = (token: string): { userId: string } => {
   }
 };
 
+export const generateResetToken = (verificationId: string): ResetToken => {
+  // Changed: userId must be string, not undefined
+  const resetToken = jwt.sign(
+    { verificationId, type: "reset" },
+    JWT_ACCESS_SECRET,
+    {
+      expiresIn: ACCESS_TOKEN_EXPIRY as jwt.SignOptions["expiresIn"],
+    },
+  );
+  return { resetToken };
+};
+
+// export const verifyResetToken = (token: string): { userId: string } => {
+//   try {
+//     const decoded = jwt.verify(token, JWT_ACCESS_SECRET) as TokenPayload;
+//     if (decoded.type !== "reset") {
+//       throw new Error("Invalid token type");
+//     }
+//     return { userId: decoded.userId };
+//   } catch (error) {
+//     throw error;
+//   }
+// };
+
 // Create session (store refresh token in database)
-export const createSession = async (
+export const createUserSession = async (
   userId: string,
   refreshToken: string,
 ): Promise<Session> => {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // 7 days, match REFRESH_TOKEN_EXPIRY
+
+  const [session] = await db
+    .insert(userSessions)
+    .values({
+      user_id: userId,
+      refresh_token: refreshToken,
+      expires_at: expiresAt,
+    })
+    .returning();
+
+  return {
+    id: session.id,
+    userId: session.user_id,
+    refreshToken: session.refresh_token,
+    expiresAt: session.expires_at,
+    revokedAt: session.revoked_at,
+  };
+};
+
+// Create reset session (store reset token in database)
+export const createAuthSession = async (
+  userId: string,
+  refreshToken: string,
+): Promise<Session> => {
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutes, match RESET_TOKEN
 
   const [session] = await db
     .insert(authSessions)
@@ -102,7 +167,7 @@ export const createSession = async (
 };
 
 // Verify refresh token
-export const verifyRefreshToken = async (
+export const verifyUserRefreshToken = async (
   refreshToken: string,
 ): Promise<{ userId: string; sessionId: string }> => {
   try {
@@ -113,12 +178,12 @@ export const verifyRefreshToken = async (
 
     const [session] = await db
       .select()
-      .from(authSessions)
+      .from(userSessions)
       .where(
         and(
-          eq(authSessions.refresh_token, refreshToken),
-          eq(authSessions.user_id, decoded.userId),
-          isNull(authSessions.revoked_at),
+          eq(userSessions.refresh_token, refreshToken),
+          eq(userSessions.user_id, decoded.userId),
+          isNull(userSessions.revoked_at),
         ),
       )
       .limit(1);
@@ -141,11 +206,13 @@ export const verifyRefreshToken = async (
 };
 
 // Revoke session (logout)
-export const revokeSession = async (refreshToken: string): Promise<void> => {
+export const revokeUserSession = async (
+  refreshToken: string,
+): Promise<void> => {
   await db
-    .update(authSessions)
+    .update(userSessions)
     .set({ revoked_at: new Date() })
-    .where(eq(authSessions.refresh_token, refreshToken));
+    .where(eq(userSessions.refresh_token, refreshToken));
 };
 
 // Revoke all user sessions

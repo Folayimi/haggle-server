@@ -186,6 +186,38 @@ export const emailVerifications = pgTable(
   }),
 );
 
+export const resetEmailVerifications = pgTable(
+  "reset_email_verifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    user_id: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    token: text("token"),
+    otp_code: text("otp_code"),
+    type: text("type", {
+      enum: enumValues(EmailVerificationType),
+    }).notNull(),
+    expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
+    verified_at: timestamp("verified_at", { withTimezone: true }),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index("reset_email_verifications_user_id_idx").on(table.user_id),
+    emailIdx: index("reset_email_verifications_email_idx").on(table.email),
+    tokenIdx: index("reset_email_verifications_token_idx").on(table.token),
+    otpCodeIdx: index("reset_email_verifications_otp_code_idx").on(
+      table.otp_code,
+    ),
+    expiresAtIdx: index("reset_email_verifications_expires_at_idx").on(
+      table.expires_at,
+    ),
+  }),
+);
+
 /**
  * USER_SESSIONS TABLE
  * Manages user sessions for:
@@ -201,21 +233,23 @@ export const userSessions = pgTable(
     user_id: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    refresh_token_hash: text("refresh_token_hash").notNull(),
-    device_name: text("device_name"),
-    platform: text("platform"), // e.g., 'ios', 'android', 'web'
-    ip_address: text("ip_address"),
-    user_agent: text("user_agent"),
+    refresh_token: text("refresh_token").notNull().unique(),
     expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
     revoked_at: timestamp("revoked_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (table) => ({
     userIdIdx: index("user_sessions_user_id_idx").on(table.user_id),
+    refreshTokenIdx: index("user_sessions_refresh_token_idx").on(
+      table.refresh_token,
+    ),
     expiresAtIdx: index("user_sessions_expires_at_idx").on(table.expires_at),
-    revokedAtIdx: index("user_sessions_revoked_at_idx").on(table.revoked_at),
   }),
 );
 
@@ -231,6 +265,11 @@ export type SelectAuthOtp = typeof authOtps.$inferSelect;
 
 export type InsertEmailVerification = typeof emailVerifications.$inferInsert;
 export type SelectEmailVerification = typeof emailVerifications.$inferSelect;
+
+export type InsertResetEmailVerification =
+  typeof resetEmailVerifications.$inferInsert;
+export type SelectResetEmailVerification =
+  typeof resetEmailVerifications.$inferSelect;
 
 export type InsertUserSession = typeof userSessions.$inferInsert;
 export type SelectUserSession = typeof userSessions.$inferSelect;

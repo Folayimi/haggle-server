@@ -4,11 +4,13 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import {
   generateTokens,
-  createSession,
-  verifyRefreshToken,
-  revokeSession,
   revokeAllUserSessions,
   verifyAccessToken,
+  generateResetToken,
+  createUserSession,
+  verifyUserRefreshToken,
+  createAuthSession,
+  revokeUserSession,
 } from "../services/tokenService";
 import { sendAppOtpEmail, sendWebVerificationEmail } from "../services/email";
 import {
@@ -27,7 +29,6 @@ const MAX_VERIFICATION_REQUESTS_PER_WINDOW = 3;
 
 const sendVerificationSchema = z.object({
   email: z.string().trim().email(),
-  type: z.enum(["web", "app"]),
 });
 
 const verifyWebSchema = z.object({
@@ -108,12 +109,13 @@ router.post("/signup", async (req: Request, res: Response) => {
     );
 
     // Create session in database
-    await createSession(user?.profile?.user_id ?? "", refreshToken);
 
     await authRepository.sendVerificationOTP(
       body?.email,
       MAX_VERIFICATION_REQUESTS_PER_WINDOW,
     );
+
+    await createAuthSession(user?.profile?.user_id ?? "", refreshToken);
 
     return res.status(201).json({
       ...user,
@@ -181,7 +183,7 @@ router.post("/login", async (req: Request, res: Response) => {
     const { accessToken, refreshToken } = generateTokens(user.user_id);
 
     // Create session in database
-    const session = await createSession(user.user_id, refreshToken);
+    const session = await createUserSession(user.user_id, refreshToken);
 
     // If you want to track device info, update the session with device details
     // if (body.device_name || body.platform) {
@@ -198,11 +200,11 @@ router.post("/login", async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "Login successful",
-      // user,
-      // tokens: {
-      //   accessToken,
-      //   refreshToken,
-      // },
+      user,
+      tokens: {
+        accessToken,
+        refreshToken,
+      },
       session: {
         id: session.id,
         expiresAt: session.expiresAt,
@@ -231,15 +233,17 @@ router.post("/refresh-token", async (req: Request, res: Response) => {
     }
 
     // Verify refresh token and get user info
-    const { userId, sessionId } = await verifyRefreshToken(body.refreshToken);
+    const { userId, sessionId } = await verifyUserRefreshToken(
+      body.refreshToken,
+    );
 
     // Generate new tokens
     const { accessToken, refreshToken: newRefreshToken } =
       generateTokens(userId);
 
     // Revoke old session and create new one
-    await revokeSession(body.refreshToken);
-    await createSession(userId, newRefreshToken);
+    await revokeUserSession(body.refreshToken);
+    await createUserSession(userId, newRefreshToken);
 
     return res.status(200).json({
       success: true,
@@ -270,7 +274,7 @@ router.post("/logout", async (req: Request, res: Response) => {
     }
 
     // Revoke the session
-    await revokeSession(body.refreshToken);
+    await revokeUserSession(body.refreshToken);
 
     return res.status(200).json({
       success: true,
@@ -354,7 +358,7 @@ router.get("/me", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/send-verification", async (req: Request, res: Response) => {
+router.post("/verify-email", async (req: Request, res: Response) => {
   const parsedBody = sendVerificationSchema.safeParse(req.body);
 
   if (!parsedBody.success) {
@@ -363,7 +367,7 @@ router.post("/send-verification", async (req: Request, res: Response) => {
     });
   }
 
-  const { email, type } = parsedBody.data;
+  const { email } = parsedBody.data;
 
   try {
     const identity =
@@ -375,9 +379,10 @@ router.post("/send-verification", async (req: Request, res: Response) => {
       });
     }
 
-    if (identity.verified_at) {
+    if (!identity.verified_at) {
       return res.status(400).json({
-        error: "Email is already verified",
+        error:
+          "We Noticed this email hasn't been verified. Continue to verify and reset Account",
       });
     }
 
@@ -387,6 +392,7 @@ router.post("/send-verification", async (req: Request, res: Response) => {
       await authRepository.countRecentEmailVerificationRequests(
         email,
         windowStart,
+        "reset",
       );
 
     if (recentRequests >= MAX_VERIFICATION_REQUESTS_PER_WINDOW) {
@@ -397,46 +403,28 @@ router.post("/send-verification", async (req: Request, res: Response) => {
 
     const expiresAt = getVerificationExpiryDate();
     const verificationRecord =
-      type === "web"
-        ? await authRepository.createEmailVerification({
-            email,
-            expires_at: expiresAt,
-            token: generateVerificationJwt(identity.user_id, email),
-            type: EmailVerificationType.WEB_LINK,
-            user_id: identity.user_id,
-          })
-        : await authRepository.createEmailVerification({
-            email,
-            expires_at: expiresAt,
-            otp_code: generateSixDigitOtp(),
-            type: EmailVerificationType.APP_OTP,
-            user_id: identity.user_id,
-          });
+      await authRepository.createResetEmailVerification({
+        email,
+        expires_at: expiresAt,
+        otp_code: generateSixDigitOtp(),
+        type: EmailVerificationType.APP_OTP,
+        user_id: identity.user_id,
+      });
 
     try {
       const supportEmail = process.env.EMAIL_USER ?? "";
 
-      if (type === "web") {
-        await sendWebVerificationEmail({
-          email,
-          expiresInMinutes: EMAIL_VERIFICATION_EXPIRY_MINUTES,
-          supportEmail,
-          verificationUrl: buildVerificationUrl(verificationRecord.token ?? ""),
-        });
-      } else {
-        await sendAppOtpEmail({
-          email,
-          expiresInMinutes: EMAIL_VERIFICATION_EXPIRY_MINUTES,
-          otpCode: verificationRecord.otp_code ?? "",
-          supportEmail,
-        });
-      }
+      await sendAppOtpEmail({
+        email,
+        expiresInMinutes: EMAIL_VERIFICATION_EXPIRY_MINUTES,
+        otpCode: verificationRecord.otp_code ?? "",
+        supportEmail,
+      });
     } catch (emailError) {
-      await authRepository.deleteEmailVerification(verificationRecord.id);
+      await authRepository.deleteResetEmailVerification(verificationRecord.id);
       console.error("Failed to send verification email", {
         email,
         error: emailError,
-        type,
       });
 
       return res.status(500).json({
@@ -444,77 +432,82 @@ router.post("/send-verification", async (req: Request, res: Response) => {
       });
     }
 
+    const { resetToken } = generateResetToken(identity.user_id);
+
+    // Create session in database
+    const session = await createAuthSession(identity.user_id, resetToken);
+
     return res.status(200).json({
-      message:
-        type === "web"
-          ? "Verification link successfully sent to your email"
-          : "OTP successfully sent to your email",
+      token: {
+        resetToken: session.refreshToken,
+      },
+      message: "Reset OTP successfully sent to your email",
       success: true,
     });
   } catch (error) {
-    console.error("Send verification error", { email, error, type });
+    console.error("Send verification error", { email, error });
     return res.status(500).json({
       error: "Failed to send verification email",
     });
   }
 });
 
-router.post("/verify-web", async (req: Request, res: Response) => {
-  const parsedBody = verifyWebSchema.safeParse(req.body);
+// router.post("/verify-web", async (req: Request, res: Response) => {
+//   const parsedBody = verifyWebSchema.safeParse(req.body);
 
-  if (!parsedBody.success) {
-    return res.status(400).json({
-      error: getValidationErrorResponse(parsedBody.error),
-    });
-  }
+//   if (!parsedBody.success) {
+//     return res.status(400).json({
+//       error: getValidationErrorResponse(parsedBody.error),
+//     });
+//   }
 
-  const { token } = parsedBody.data;
+//   const { token } = parsedBody.data;
 
-  try {
-    const payload = verifyVerificationJwt(token);
-    const verification =
-      await authRepository.findActiveWebVerificationByToken(token);
+//   try {
+//     const payload = verifyVerificationJwt(token);
+//     const verification =
+//       await authRepository.findActiveWebVerificationByToken(token);
 
-    if (!verification || verification.expires_at <= new Date()) {
-      return res.status(400).json({
-        error: "Invalid or expired verification token",
-      });
-    }
+//     if (!verification || verification.expires_at <= new Date()) {
+//       return res.status(400).json({
+//         error: "Invalid or expired verification token",
+//       });
+//     }
 
-    if (
-      verification.user_id !== payload.sub ||
-      verification.email !== payload.email
-    ) {
-      return res.status(400).json({
-        error: "Invalid verification token",
-      });
-    }
+//     if (
+//       verification.user_id !== payload.sub ||
+//       verification.email !== payload.email
+//     ) {
+//       return res.status(400).json({
+//         error: "Invalid verification token",
+//       });
+//     }
 
-    const markedVerification =
-      await authRepository.markEmailVerificationVerified(verification.id);
+//     const markedVerification =
+//       await authRepository.markEmailVerificationVerified(verification.id);
 
-    if (!markedVerification) {
-      return res.status(400).json({
-        error: "Verification token has already been used",
-      });
-    }
+//     if (!markedVerification) {
+//       return res.status(400).json({
+//         error: "Verification token has already been used",
+//       });
+//     }
 
-    await authRepository.markEmailIdentityVerified(
-      verification.user_id,
-      verification.email,
-    );
+//     await authRepository.markEmailIdentityVerified(
+//       verification.user_id,
+//       verification.email,
+//     );
 
-    return res.status(200).json({
-      message: "Email verified successfully",
-      success: true,
-    });
-  } catch (error) {
-    console.error("Verify web email error", { error });
-    return res.status(400).json({
-      error: "Invalid or expired verification token",
-    });
-  }
-});
+//     return res.status(200).json({
+//       message: "Email verified successfully",
+//       success: true,
+//     });
+//   } catch (error) {
+//     console.error("Verify web email error", { error });
+//     return res.status(400).json({
+//       error: "Invalid or expired verification token",
+//     });
+//   }
+// });
 
 router.post("/verify-otp", async (req: Request, res: Response) => {
   const parsedBody = verifyOtpSchema.safeParse(req.body);
@@ -527,10 +520,10 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
 
   const { email, otp_code: otpCode } = parsedBody.data;
 
-  if (!email || !otpCode){
+  if (!email || !otpCode) {
     return res.status(400).json({
-      error: "email and otpCode is required!"
-    })
+      error: "email and otpCode is required!",
+    });
   }
 
   try {
@@ -571,81 +564,90 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/otp", async (req: Request, res: Response) => {
-  try {
-    const body = req.body as {
-      user_id?: string;
-      channel?: string;
-      purpose?: string;
-      target?: string;
-      code_hash?: string;
-      expires_at?: string;
-    };
+router.post("/verify-reset-otp", async (req: Request, res: Response) => {
+  const parsedBody = verifyOtpSchema.safeParse(req.body);
 
-    if (
-      !body.channel ||
-      !body.purpose ||
-      !body.target ||
-      !body.code_hash ||
-      !body.expires_at
-    ) {
+  if (!parsedBody.success) {
+    return res.status(400).json({
+      error: getValidationErrorResponse(parsedBody.error),
+    });
+  }
+
+  const { email, otp_code: otpCode } = parsedBody.data;
+
+  if (!email || !otpCode) {
+    return res.status(400).json({
+      error: "email and otpCode is required!",
+    });
+  }
+
+  try {
+    const verification = await authRepository.findActiveResetOtpVerification(
+      email,
+      otpCode,
+    );
+
+    if (!verification || verification.expires_at <= new Date()) {
       return res.status(400).json({
-        error:
-          "channel, purpose, target, code_hash, and expires_at are required",
+        error: "Invalid or expired OTP",
       });
     }
 
-    const otp = await authRepository.createOtp({
-      user_id: body.user_id,
-      channel: body.channel as never,
-      purpose: body.purpose as never,
-      target: body.target,
-      code_hash: body.code_hash,
-      expires_at: new Date(body.expires_at),
-    });
+    const markedVerification =
+      await authRepository.markResetEmailVerificationVerified(verification.id);
 
-    return res.status(201).json(otp);
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ error: "Failed to create OTP", details: error });
-  }
-});
-
-router.post("/sessions", async (req: Request, res: Response) => {
-  try {
-    const body = req.body as {
-      user_id?: string;
-      refresh_token_hash?: string;
-      device_name?: string;
-      platform?: string;
-      ip_address?: string;
-      user_agent?: string;
-      expires_at?: string;
-    };
-
-    if (!body.user_id || !body.refresh_token_hash || !body.expires_at) {
+    if (!markedVerification) {
       return res.status(400).json({
-        error: "user_id, refresh_token_hash, and expires_at are required",
+        error: "OTP has already been used",
       });
     }
 
-    const session = await authRepository.createUserSession({
-      user_id: body.user_id,
-      refresh_token_hash: body.refresh_token_hash,
-      device_name: body.device_name,
-      platform: body.platform,
-      ip_address: body.ip_address,
-      user_agent: body.user_agent,
-      expires_at: new Date(body.expires_at),
+    return res.status(200).json({
+      message: "Email verified!",
+      success: true,
     });
-
-    return res.status(201).json(session);
   } catch (error) {
-    return res
-      .status(500)
-      .json({ error: "Failed to create session", details: error });
+    console.error("Verify OTP error", { email, error });
+    return res.status(500).json({
+      error: "Failed to verify OTP",
+    });
   }
 });
+
+// router.post("/sessions", async (req: Request, res: Response) => {
+//   try {
+//     const body = req.body as {
+//       user_id?: string;
+//       refresh_token_hash?: string;
+//       device_name?: string;
+//       platform?: string;
+//       ip_address?: string;
+//       user_agent?: string;
+//       expires_at?: string;
+//     };
+
+//     if (!body.user_id || !body.refresh_token_hash || !body.expires_at) {
+//       return res.status(400).json({
+//         error: "user_id, refresh_token_hash, and expires_at are required",
+//       });
+//     }
+
+//     const session = await authRepository.createUserSession({
+//       user_id: body.user_id,
+//       refresh_token_hash: body.refresh_token_hash,
+//       device_name: body.device_name,
+//       platform: body.platform,
+//       ip_address: body.ip_address,
+//       user_agent: body.user_agent,
+//       expires_at: new Date(body.expires_at),
+//     });
+
+//     return res.status(201).json(session);
+//   } catch (error) {
+//     return res
+//       .status(500)
+//       .json({ error: "Failed to create session", details: error });
+//   }
+// });
 
 export default router;

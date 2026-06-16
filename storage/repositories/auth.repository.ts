@@ -4,6 +4,7 @@ import {
   authIdentities,
   authOtps,
   emailVerifications,
+  resetEmailVerifications,
   userSessions,
   users,
   type InsertAuthIdentity,
@@ -11,6 +12,10 @@ import {
   type InsertEmailVerification,
   type InsertUserSession,
 } from "../../src/db/schema/auth";
+import {
+  authSessions,
+  type InsertAuthSession,
+} from "../../src/db/schema/auth-sessions";
 import {
   userProfiles,
   userSettings,
@@ -23,7 +28,13 @@ import {
   UserStatus,
 } from "../../src/db/schema";
 import { error } from "node:console";
-import { EMAIL_VERIFICATION_EXPIRY_MINUTES, generateSixDigitOtp, generateVerificationJwt, getRateLimitWindowMs, getVerificationExpiryDate } from "../../services/emailVerification";
+import {
+  EMAIL_VERIFICATION_EXPIRY_MINUTES,
+  generateSixDigitOtp,
+  generateVerificationJwt,
+  getRateLimitWindowMs,
+  getVerificationExpiryDate,
+} from "../../services/emailVerification";
 import { sendAppOtpEmail } from "../../services/email";
 
 export interface CreateUserAccountInput {
@@ -237,30 +248,31 @@ export class AuthRepository extends BaseRepository {
       const recentRequests = await this.countRecentEmailVerificationRequests(
         email,
         windowStart,
+        "account",
       );
 
       if (recentRequests >= maxVerificationRequest) {
-        throw error('Too many verification requests. Please try again later.')
+        throw error("Too many verification requests. Please try again later.");
       }
 
       const expiresAt = getVerificationExpiryDate();
       const verificationRecord = await this.createEmailVerification({
-              email,
-              expires_at: expiresAt,
-              otp_code: generateSixDigitOtp(),
-              type: EmailVerificationType.APP_OTP,
-              user_id: identity.user_id,
-            });
+        email,
+        expires_at: expiresAt,
+        otp_code: generateSixDigitOtp(),
+        type: EmailVerificationType.APP_OTP,
+        user_id: identity.user_id,
+      });
 
       try {
         const supportEmail = process.env.EMAIL_USER ?? "";
 
         await sendAppOtpEmail({
-            email,
-            expiresInMinutes: EMAIL_VERIFICATION_EXPIRY_MINUTES,
-            otpCode: verificationRecord.otp_code ?? "",
-            supportEmail,
-          });
+          email,
+          expiresInMinutes: EMAIL_VERIFICATION_EXPIRY_MINUTES,
+          otpCode: verificationRecord.otp_code ?? "",
+          supportEmail,
+        });
       } catch (emailError) {
         await this.deleteEmailVerification(verificationRecord.id);
         console.error("Failed to send verification email", {
@@ -270,7 +282,7 @@ export class AuthRepository extends BaseRepository {
       }
     } catch (err) {
       console.error("Send verification error", { email, err });
-      throw error('Failed to send verification email', err)
+      throw error("Failed to send verification email", err);
     }
   }
 
@@ -309,18 +321,38 @@ export class AuthRepository extends BaseRepository {
     return null;
   }
 
-  async countRecentEmailVerificationRequests(email: string, since: Date) {
-    const [result] = await this.database
-      .select({ count: count() })
-      .from(emailVerifications)
-      .where(
-        and(
-          eq(emailVerifications.email, email),
-          gt(emailVerifications.created_at, since),
-        ),
-      );
+  async countRecentEmailVerificationRequests(
+    email: string,
+    since: Date,
+    type: string,
+  ) {
+    if (type === "account") {
+      const [result] = await this.database
+        .select({ count: count() })
+        .from(emailVerifications)
+        .where(
+          and(
+            eq(emailVerifications.email, email),
+            gt(emailVerifications.created_at, since),
+          ),
+        );
 
-    return result?.count ?? 0;
+      return result?.count ?? 0;
+    } else if (type === "reset") {
+      const [result] = await this.database
+        .select({ count: count() })
+        .from(resetEmailVerifications)
+        .where(
+          and(
+            eq(resetEmailVerifications.email, email),
+            gt(resetEmailVerifications.created_at, since),
+          ),
+        );
+
+      return result?.count ?? 0;
+    } else {
+      return 0;
+    }
   }
 
   async createEmailVerification(input: InsertEmailVerification) {
@@ -332,10 +364,28 @@ export class AuthRepository extends BaseRepository {
     return verification;
   }
 
+  async createResetEmailVerification(input: InsertEmailVerification) {
+    const [verification] = await this.database
+      .insert(resetEmailVerifications)
+      .values(input)
+      .returning();
+
+    return verification;
+  }
+
   async deleteEmailVerification(id: string) {
     const [verification] = await this.database
       .delete(emailVerifications)
       .where(eq(emailVerifications.id, id))
+      .returning();
+
+    return verification ?? null;
+  }
+
+  async deleteResetEmailVerification(id: string) {
+    const [verification] = await this.database
+      .delete(resetEmailVerifications)
+      .where(eq(resetEmailVerifications.id, id))
       .returning();
 
     return verification ?? null;
@@ -372,6 +422,22 @@ export class AuthRepository extends BaseRepository {
     return result[0] ?? null;
   }
 
+  async findActiveResetOtpVerification(email: string, otpCode: string) {
+    const result = await this.database
+      .select()
+      .from(resetEmailVerifications)
+      .where(
+        and(
+          eq(resetEmailVerifications.email, email),
+          eq(resetEmailVerifications.otp_code, otpCode),
+          eq(resetEmailVerifications.type, EmailVerificationType.APP_OTP),
+          isNull(resetEmailVerifications.verified_at),
+        ),
+      );
+
+    return result[0] ?? null;
+  }
+
   async markEmailVerificationVerified(id: string) {
     const [verification] = await this.database
       .update(emailVerifications)
@@ -380,6 +446,21 @@ export class AuthRepository extends BaseRepository {
         and(
           eq(emailVerifications.id, id),
           isNull(emailVerifications.verified_at),
+        ),
+      )
+      .returning();
+
+    return verification ?? null;
+  }
+
+  async markResetEmailVerificationVerified(id: string) {
+    const [verification] = await this.database
+      .update(resetEmailVerifications)
+      .set({ verified_at: new Date() })
+      .where(
+        and(
+          eq(resetEmailVerifications.id, id),
+          isNull(resetEmailVerifications.verified_at),
         ),
       )
       .returning();

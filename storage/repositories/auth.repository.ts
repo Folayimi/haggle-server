@@ -231,7 +231,11 @@ export class AuthRepository extends BaseRepository {
     return user ?? null;
   }
 
-  async sendVerificationOTP(email: string, maxVerificationRequest: number) {
+  async sendVerificationOTP(
+    email: string,
+    maxVerificationRequest: number,
+    res: any,
+  ) {
     try {
       const identity = await this.findPrimaryEmailIdentityByEmail(email);
 
@@ -240,7 +244,7 @@ export class AuthRepository extends BaseRepository {
       }
 
       if (identity.verified_at) {
-        throw error("Email is already verifie");
+        throw error("Email is already verified");
       }
 
       const rateLimitWindowMs = getRateLimitWindowMs();
@@ -279,10 +283,11 @@ export class AuthRepository extends BaseRepository {
           email,
           error: emailError,
         });
+        return res.status(500).json({ error: "Failed to create user account" });
       }
     } catch (err) {
       console.error("Send verification error", { email, err });
-      throw error("Failed to send verification email", err);
+      return res.status(500).json({ error: "Send verification error" });
     }
   }
 

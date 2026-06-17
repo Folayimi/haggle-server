@@ -23,6 +23,7 @@ import {
   verifyVerificationJwt,
 } from "../services/emailVerification";
 import { EmailVerificationType } from "../src/db/schema";
+import { error } from "console";
 
 const router = Router();
 const MAX_VERIFICATION_REQUESTS_PER_WINDOW = 3;
@@ -38,6 +39,7 @@ const verifyWebSchema = z.object({
 const verifyOtpSchema = z.object({
   email: z.string().trim().email(),
   otp_code: z.string().regex(/^\d{6}$/),
+  token: z.string().trim().min(1),
 });
 
 const getValidationErrorResponse = (error: z.ZodError) =>
@@ -103,16 +105,17 @@ router.post("/signup", async (req: Request, res: Response) => {
 
     console.log("Created user account:", user);
 
-    // Generate tokens for the new user
-    const { accessToken, refreshToken } = generateTokens(
-      user?.profile?.user_id ?? "",
-    );
-
     // Create session in database
 
     await authRepository.sendVerificationOTP(
       body?.email,
       MAX_VERIFICATION_REQUESTS_PER_WINDOW,
+      res,
+    );
+
+    // Generate tokens for the new user
+    const { accessToken, refreshToken } = generateTokens(
+      user?.profile?.user_id ?? "",
     );
 
     await createAuthSession(user?.profile?.user_id ?? "", refreshToken);
@@ -518,7 +521,17 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
     });
   }
 
-  const { email, otp_code: otpCode } = parsedBody.data;
+  const { email, otp_code: otpCode, token } = parsedBody.data;
+
+  const verify = verifyAccessToken(token);
+
+  const user = authRepository.findUserById(verify?.userId);
+
+  if (!user) {
+    return res.status(401).json({
+      error: "UnAuthorized token used",
+    });
+  }
 
   if (!email || !otpCode) {
     return res.status(400).json({
@@ -573,7 +586,17 @@ router.post("/verify-reset-otp", async (req: Request, res: Response) => {
     });
   }
 
-  const { email, otp_code: otpCode } = parsedBody.data;
+  const { email, otp_code: otpCode, token } = parsedBody.data;
+
+  const verify = verifyAccessToken(token);
+
+  const user = authRepository.findUserById(verify?.userId);
+
+  if (!user) {
+    return res.status(401).json({
+      error: "UnAuthorized token used",
+    });
+  }
 
   if (!email || !otpCode) {
     return res.status(400).json({

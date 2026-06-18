@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, isNull, lte } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, lt, lte } from "drizzle-orm";
 import { BaseRepository } from "./base.repository";
 import {
   authIdentities,
@@ -36,6 +36,7 @@ import {
   getVerificationExpiryDate,
 } from "../../services/emailVerification";
 import { sendAppOtpEmail } from "../../services/email";
+import { db } from "../../src/db/db";
 
 export interface CreateUserAccountInput {
   full_name: string;
@@ -52,6 +53,22 @@ export interface CreateUserAccountInput {
   country_code?: string;
   city?: string;
   response_time_label?: string;
+}
+
+interface Session {
+  id: string;
+  userId: string;
+  refreshToken: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+}
+
+interface ResetSession {
+  id: string;
+  verificationId: string;
+  resetToken: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
 }
 
 export class AuthRepository extends BaseRepository {
@@ -183,14 +200,86 @@ export class AuthRepository extends BaseRepository {
     return otp ?? null;
   }
 
-  async createUserSession(input: InsertUserSession) {
+  createUserSession = async (
+    userId: string,
+    refreshToken: string,
+  ): Promise<Session> => {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days, match REFRESH_TOKEN_EXPIRY
+
     const [session] = await this.database
       .insert(userSessions)
-      .values(input)
+      .values({
+        user_id: userId,
+        refresh_token: refreshToken,
+        expires_at: expiresAt,
+      })
       .returning();
 
-    return session;
-  }
+    return {
+      id: session.id,
+      userId: session.user_id,
+      refreshToken: session.refresh_token,
+      expiresAt: session.expires_at,
+      revokedAt: session.revoked_at,
+    };
+  };
+
+  // Create reset session (store reset token in database)
+  createAuthSession = async (
+    userId: string,
+    refreshToken: string,
+  ): Promise<Session> => {
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutes, match RESET_TOKEN
+
+    const [session] = await this.database
+      .insert(authSessions)
+      .values({
+        user_id: userId,
+        refresh_token: refreshToken,
+        expires_at: expiresAt,
+      })
+      .returning();
+
+    return {
+      id: session.id,
+      userId: session.user_id,
+      refreshToken: session.refresh_token,
+      expiresAt: session.expires_at,
+      revokedAt: session.revoked_at,
+    };
+  };
+
+  // Revoke session (logout)
+  revokeUserSession = async (refreshToken: string): Promise<void> => {
+    await this.database
+      .update(userSessions)
+      .set({ revoked_at: new Date() })
+      .where(eq(userSessions.refresh_token, refreshToken));
+  };
+
+  revokeAuthSession = async (refreshToken: string): Promise<void> => {
+    await this.database
+      .update(authSessions)
+      .set({ revoked_at: new Date() })
+      .where(eq(authSessions.refresh_token, refreshToken));
+  };
+
+  // Revoke all user session
+  revokeAllUserSessions = async (userId: string): Promise<void> => {
+    await this.database
+      .update(authSessions)
+      .set({ revoked_at: new Date() })
+      .where(eq(authSessions.user_id, userId));
+  };
+
+  // Clean up expired sessions (run via cron job)
+  cleanupExpiredSessions = async (): Promise<void> => {
+    await this.database
+      .delete(authSessions)
+      .where(lt(authSessions.expires_at, new Date()));
+  };
 
   async listUserSessions(userId: string) {
     return this.database
@@ -198,16 +287,6 @@ export class AuthRepository extends BaseRepository {
       .from(userSessions)
       .where(eq(userSessions.user_id, userId))
       .orderBy(desc(userSessions.created_at));
-  }
-
-  async revokeUserSession(sessionId: string) {
-    const [session] = await this.database
-      .update(userSessions)
-      .set({ revoked_at: new Date() })
-      .where(eq(userSessions.id, sessionId))
-      .returning();
-
-    return session ?? null;
   }
 
   async findUserByEmail(email?: string) {

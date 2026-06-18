@@ -7,10 +7,9 @@ import {
   revokeAllUserSessions,
   verifyAccessToken,
   generateResetToken,
-  createUserSession,
   verifyUserRefreshToken,
-  createAuthSession,
   revokeUserSession,
+  verifyResetToken,
 } from "../services/tokenService";
 import { sendAppOtpEmail, sendWebVerificationEmail } from "../services/email";
 import {
@@ -39,7 +38,6 @@ const verifyWebSchema = z.object({
 const verifyOtpSchema = z.object({
   email: z.string().trim().email(),
   otp_code: z.string().regex(/^\d{6}$/),
-  token: z.string().trim().min(1),
 });
 
 const getValidationErrorResponse = (error: z.ZodError) =>
@@ -118,13 +116,17 @@ router.post("/signup", async (req: Request, res: Response) => {
       user?.profile?.user_id ?? "",
     );
 
-    await createAuthSession(user?.profile?.user_id ?? "", refreshToken);
+    await authRepository.cleanupExpiredSessions();
+
+    await authRepository.createAuthSession(
+      user?.profile?.user_id ?? "",
+      refreshToken,
+    );
 
     return res.status(201).json({
       ...user,
       tokens: {
         accessToken,
-        refreshToken,
       },
       message: "Verificaition Code sent to your email",
       success: true,
@@ -186,7 +188,10 @@ router.post("/login", async (req: Request, res: Response) => {
     const { accessToken, refreshToken } = generateTokens(user.user_id);
 
     // Create session in database
-    const session = await createUserSession(user.user_id, refreshToken);
+    const session = await authRepository.createUserSession(
+      user.user_id,
+      refreshToken,
+    );
 
     // If you want to track device info, update the session with device details
     // if (body.device_name || body.platform) {
@@ -245,8 +250,8 @@ router.post("/refresh-token", async (req: Request, res: Response) => {
       generateTokens(userId);
 
     // Revoke old session and create new one
-    await revokeUserSession(body.refreshToken);
-    await createUserSession(userId, newRefreshToken);
+    await authRepository.revokeUserSession(body.refreshToken);
+    await authRepository.createUserSession(userId, newRefreshToken);
 
     return res.status(200).json({
       success: true,
@@ -438,7 +443,10 @@ router.post("/verify-email", async (req: Request, res: Response) => {
     const { resetToken } = generateResetToken(identity.user_id);
 
     // Create session in database
-    const session = await createAuthSession(identity.user_id, resetToken);
+    const session = await authRepository.createAuthSession(
+      identity.user_id,
+      resetToken,
+    );
 
     return res.status(200).json({
       token: {
@@ -455,63 +463,6 @@ router.post("/verify-email", async (req: Request, res: Response) => {
   }
 });
 
-// router.post("/verify-web", async (req: Request, res: Response) => {
-//   const parsedBody = verifyWebSchema.safeParse(req.body);
-
-//   if (!parsedBody.success) {
-//     return res.status(400).json({
-//       error: getValidationErrorResponse(parsedBody.error),
-//     });
-//   }
-
-//   const { token } = parsedBody.data;
-
-//   try {
-//     const payload = verifyVerificationJwt(token);
-//     const verification =
-//       await authRepository.findActiveWebVerificationByToken(token);
-
-//     if (!verification || verification.expires_at <= new Date()) {
-//       return res.status(400).json({
-//         error: "Invalid or expired verification token",
-//       });
-//     }
-
-//     if (
-//       verification.user_id !== payload.sub ||
-//       verification.email !== payload.email
-//     ) {
-//       return res.status(400).json({
-//         error: "Invalid verification token",
-//       });
-//     }
-
-//     const markedVerification =
-//       await authRepository.markEmailVerificationVerified(verification.id);
-
-//     if (!markedVerification) {
-//       return res.status(400).json({
-//         error: "Verification token has already been used",
-//       });
-//     }
-
-//     await authRepository.markEmailIdentityVerified(
-//       verification.user_id,
-//       verification.email,
-//     );
-
-//     return res.status(200).json({
-//       message: "Email verified successfully",
-//       success: true,
-//     });
-//   } catch (error) {
-//     console.error("Verify web email error", { error });
-//     return res.status(400).json({
-//       error: "Invalid or expired verification token",
-//     });
-//   }
-// });
-
 router.post("/verify-otp", async (req: Request, res: Response) => {
   const parsedBody = verifyOtpSchema.safeParse(req.body);
 
@@ -521,7 +472,17 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
     });
   }
 
-  const { email, otp_code: otpCode, token } = parsedBody.data;
+  const authHeader = req.headers.authorization;
+
+  const token = authHeader?.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({
+      error: "UnAuthorized, token is requrired",
+    });
+  }
+
+  const { email, otp_code: otpCode } = parsedBody.data;
 
   const verify = verifyAccessToken(token);
 
@@ -586,9 +547,19 @@ router.post("/verify-reset-otp", async (req: Request, res: Response) => {
     });
   }
 
-  const { email, otp_code: otpCode, token } = parsedBody.data;
+  const authHeader = req.headers.authorization;
 
-  const verify = verifyAccessToken(token);
+  const token = authHeader?.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({
+      error: "UnAuthorized, token is requrired",
+    });
+  }
+
+  const { email, otp_code: otpCode } = parsedBody.data;
+
+  const verify = verifyResetToken(token);
 
   const user = authRepository.findUserById(verify?.userId);
 
@@ -633,6 +604,95 @@ router.post("/verify-reset-otp", async (req: Request, res: Response) => {
     console.error("Verify OTP error", { email, error });
     return res.status(500).json({
       error: "Failed to verify OTP",
+    });
+  }
+});
+
+router.post("/password-reset", async (req: Request, res: Response) => {
+  try {
+    const { newPassword, confirmPassword } = req.body;
+
+    const authHeader = req.headers.authorization;
+
+    const token = authHeader?.split(" ")[1];
+
+    // Validate input
+    if (!token) {
+      return res.status(400).json({
+        error: "Token is required",
+      });
+    }
+
+    if (!newPassword) {
+      return res.status(400).json({
+        error: "New password is required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        error: "Password must be at least 6 characters",
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        error: "Passwords do not match",
+      });
+    }
+
+    // Find valid token
+
+    if (!resetToken) {
+      return res.status(400).json({
+        error: "Invalid or expired reset token",
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update user's password
+    await db
+      .update(users)
+      .set({
+        password_hash: passwordHash,
+        updated_at: new Date(),
+      })
+      .where(eq(users.id, resetToken.user_id));
+
+    // Mark token as used
+    await db
+      .update(password_reset_tokens)
+      .set({
+        used: true,
+        used_at: new Date(),
+      })
+      .where(eq(password_reset_tokens.id, resetToken.id));
+
+    // Optional: Invalidate all other tokens for this user
+    await db
+      .update(password_reset_tokens)
+      .set({
+        used: true,
+      })
+      .where(
+        and(
+          eq(password_reset_tokens.user_id, resetToken.user_id),
+          eq(password_reset_tokens.used, false),
+        ),
+      );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Password reset successful! You can now log in with your new password.",
+    });
+  } catch (error) {
+    console.error("Password reset error:", error);
+    return res.status(500).json({
+      error: "Failed to reset password",
     });
   }
 });

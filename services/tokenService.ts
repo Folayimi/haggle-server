@@ -1,8 +1,6 @@
 import jwt from "jsonwebtoken";
 import { db } from "../src/db/db";
-import {
-  authSessions,  
-} from "../src/db/schema/auth-sessions";
+import { authSessions } from "../src/db/schema/auth-sessions";
 import { eq, and, isNull, lt } from "drizzle-orm";
 import { config } from "dotenv";
 import { userSessions } from "../src/db/schema";
@@ -22,22 +20,6 @@ interface Tokens {
 
 interface ResetToken {
   resetToken: string;
-}
-
-interface Session {
-  id: string;
-  userId: string;
-  refreshToken: string;
-  expiresAt: Date;
-  revokedAt: Date | null;
-}
-
-interface ResetSession {
-  id: string;
-  verificationId: string;
-  resetToken: string;
-  expiresAt: Date;
-  revokedAt: Date | null;
 }
 
 // Validate required environment variables on startup
@@ -102,68 +84,16 @@ export const generateResetToken = (verificationId: string): ResetToken => {
   return { resetToken };
 };
 
-// export const verifyResetToken = (token: string): { userId: string } => {
-//   try {
-//     const decoded = jwt.verify(token, JWT_ACCESS_SECRET) as TokenPayload;
-//     if (decoded.type !== "reset") {
-//       throw new Error("Invalid token type");
-//     }
-//     return { userId: decoded.userId };
-//   } catch (error) {
-//     throw error;
-//   }
-// };
-
-// Create session (store refresh token in database)
-export const createUserSession = async (
-  userId: string,
-  refreshToken: string,
-): Promise<Session> => {
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // 7 days, match REFRESH_TOKEN_EXPIRY
-
-  const [session] = await db
-    .insert(userSessions)
-    .values({
-      user_id: userId,
-      refresh_token: refreshToken,
-      expires_at: expiresAt,
-    })
-    .returning();
-
-  return {
-    id: session.id,
-    userId: session.user_id,
-    refreshToken: session.refresh_token,
-    expiresAt: session.expires_at,
-    revokedAt: session.revoked_at,
-  };
-};
-
-// Create reset session (store reset token in database)
-export const createAuthSession = async (
-  userId: string,
-  refreshToken: string,
-): Promise<Session> => {
-  const expiresAt = new Date();
-  expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutes, match RESET_TOKEN
-
-  const [session] = await db
-    .insert(authSessions)
-    .values({
-      user_id: userId,
-      refresh_token: refreshToken,
-      expires_at: expiresAt,
-    })
-    .returning();
-
-  return {
-    id: session.id,
-    userId: session.user_id,
-    refreshToken: session.refresh_token,
-    expiresAt: session.expires_at,
-    revokedAt: session.revoked_at,
-  };
+export const verifyResetToken = (token: string): { userId: string } => {
+  try {
+    const decoded = jwt.verify(token, JWT_ACCESS_SECRET) as TokenPayload;
+    if (decoded.type !== "reset") {
+      throw new Error("Invalid token type");
+    }
+    return { userId: decoded.userId };
+  } catch (error) {
+    throw error;
+  }
 };
 
 // Verify refresh token

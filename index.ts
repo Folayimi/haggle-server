@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { Request, Response } from "express";
 import { startEmailVerificationCleanupJob } from "./jobs/emailVerificationCleanup";
+import {sessionCleanupService} from "./services/session-cleanup.service";
 import { registerRoutes } from "./routes/routes";
 import cors from "cors";
 const app = express();
@@ -15,6 +16,10 @@ app.use(
     methods: ["GET", "POST", "PUT", "DELETE"],
   }),
 );
+
+// Start the cron job when the server starts
+// Runs daily at 2:00 AM
+sessionCleanupService.startCronJob('0 2 * * *');
 
 // Health check
 app.get("/health", (_req: Request, res: Response) => {

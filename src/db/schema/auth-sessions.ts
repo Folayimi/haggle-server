@@ -12,7 +12,7 @@ export const authSessions = pgTable(
     user_id: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    refresh_token: text("refresh_token").notNull().unique(),
+    reset_token: text("reset_token").notNull().unique(),
     expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
     revoked_at: timestamp("revoked_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true })
@@ -25,13 +25,10 @@ export const authSessions = pgTable(
   },
   (table) => ({
     userIdIdx: index("auth_sessions_user_id_idx").on(table.user_id),
-    refreshTokenIdx: index("auth_sessions_refresh_token_idx").on(
-      table.refresh_token,
-    ),
+    resetTokenIdx: index("auth_sessions_reset_token_idx").on(table.reset_token),
     expiresAtIdx: index("auth_sessions_expires_at_idx").on(table.expires_at),
   }),
 );
-
 
 // Type inference
 export type InsertAuthSession = typeof authSessions.$inferInsert;

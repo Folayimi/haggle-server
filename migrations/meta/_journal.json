@@ -71,6 +71,20 @@
       "when": 1781616250538,
       "tag": "0009_silky_kabuki",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781879997018,
+      "tag": "0010_fine_kinsey_walden",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781880228554,
+      "tag": "0011_bright_outlaw_kid",
+      "breakpoints": true
     }
   ]
 }

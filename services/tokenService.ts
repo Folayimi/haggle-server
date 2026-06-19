@@ -25,6 +25,7 @@ interface ResetToken {
 // Validate required environment variables on startup
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+const RESET_TOKEN_EXPIRY = process.env.RESET_TOKEN_EXPIRY || "10m";
 const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "15m";
 const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY || "7d";
 
@@ -72,24 +73,43 @@ export const verifyAccessToken = (token: string): { userId: string } => {
   }
 };
 
-export const generateResetToken = (verificationId: string): ResetToken => {
+export const generateResetToken = (userId: string): ResetToken => {
   // Changed: userId must be string, not undefined
-  const resetToken = jwt.sign(
-    { verificationId, type: "reset" },
-    JWT_ACCESS_SECRET,
-    {
-      expiresIn: ACCESS_TOKEN_EXPIRY as jwt.SignOptions["expiresIn"],
-    },
-  );
+  const resetToken = jwt.sign({ userId, type: "reset" }, JWT_ACCESS_SECRET, {
+    expiresIn: RESET_TOKEN_EXPIRY as jwt.SignOptions["expiresIn"],
+  });
   return { resetToken };
 };
 
-export const verifyResetToken = (token: string): { userId: string } => {
+export const verifyResetToken = async (
+  token: string,
+): Promise<{ userId: string }> => {
   try {
     const decoded = jwt.verify(token, JWT_ACCESS_SECRET) as TokenPayload;
     if (decoded.type !== "reset") {
       throw new Error("Invalid token type");
     }
+    console.log("decodded:", decoded);
+    const [session] = await db
+      .select()
+      .from(authSessions)
+      .where(
+        and(
+          eq(authSessions.reset_token, token),
+          eq(authSessions.user_id, decoded.userId),
+          isNull(authSessions.revoked_at),
+        ),
+      )
+      .limit(1);
+
+    if (!session) {
+      throw new Error("Invalid token");
+    }
+
+    if (new Date() > session.expires_at) {
+      throw new Error("Auth Session expired");
+    }
+
     return { userId: decoded.userId };
   } catch (error) {
     throw error;

@@ -1,6 +1,8 @@
 import { and, count, desc, eq, gt, isNull, lt, lte } from "drizzle-orm";
 import { BaseRepository } from "./base.repository";
 import {
+  InsertUser,
+  SelectUser,
   authIdentities,
   authOtps,
   emailVerifications,
@@ -65,7 +67,7 @@ interface Session {
 
 interface ResetSession {
   id: string;
-  verificationId: string;
+  userId: string;
   resetToken: string;
   expiresAt: Date;
   revokedAt: Date | null;
@@ -115,6 +117,17 @@ export class AuthRepository extends BaseRepository {
     return this.getUserAccountById(user.id);
   }
 
+  async deleteUserData(userId: string) {
+    const [user] = await this.database
+      .delete(users)
+      .where(eq(users.id, userId))
+      .returning();
+
+    console.log("deleted userData: ", user);
+
+    return user ?? null;
+  }
+
   async getUserAccountById(userId: string) {
     const [user, profile, settings, identities] = await Promise.all([
       this.database.select().from(users).where(eq(users.id, userId)),
@@ -142,6 +155,18 @@ export class AuthRepository extends BaseRepository {
       settings: settings[0] ?? null,
       identities,
     };
+  }
+
+  async updateUserPassword(userId: string, newPassword: string) {
+    const [user] = await this.database
+      .update(authIdentities)
+      .set({ password_hash: newPassword })
+      .where(eq(authIdentities.user_id, userId))
+      .returning();
+
+    console.log("user password updated!", newPassword, user);
+
+    return user ?? null;
   }
 
   async findIdentityByEmail(email: string) {
@@ -228,8 +253,8 @@ export class AuthRepository extends BaseRepository {
   // Create reset session (store reset token in database)
   createAuthSession = async (
     userId: string,
-    refreshToken: string,
-  ): Promise<Session> => {
+    resetToken: string,
+  ): Promise<ResetSession> => {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutes, match RESET_TOKEN
 
@@ -237,7 +262,7 @@ export class AuthRepository extends BaseRepository {
       .insert(authSessions)
       .values({
         user_id: userId,
-        refresh_token: refreshToken,
+        reset_token: resetToken,
         expires_at: expiresAt,
       })
       .returning();
@@ -245,7 +270,7 @@ export class AuthRepository extends BaseRepository {
     return {
       id: session.id,
       userId: session.user_id,
-      refreshToken: session.refresh_token,
+      resetToken: session.reset_token,
       expiresAt: session.expires_at,
       revokedAt: session.revoked_at,
     };
@@ -259,11 +284,11 @@ export class AuthRepository extends BaseRepository {
       .where(eq(userSessions.refresh_token, refreshToken));
   };
 
-  revokeAuthSession = async (refreshToken: string): Promise<void> => {
+  revokeAuthSession = async (resetToken: string): Promise<void> => {
     await this.database
       .update(authSessions)
       .set({ revoked_at: new Date() })
-      .where(eq(authSessions.refresh_token, refreshToken));
+      .where(eq(authSessions.reset_token, resetToken));
   };
 
   // Revoke all user session
@@ -272,13 +297,6 @@ export class AuthRepository extends BaseRepository {
       .update(authSessions)
       .set({ revoked_at: new Date() })
       .where(eq(authSessions.user_id, userId));
-  };
-
-  // Clean up expired sessions (run via cron job)
-  cleanupExpiredSessions = async (): Promise<void> => {
-    await this.database
-      .delete(authSessions)
-      .where(lt(authSessions.expires_at, new Date()));
   };
 
   async listUserSessions(userId: string) {
@@ -313,6 +331,7 @@ export class AuthRepository extends BaseRepository {
   async sendVerificationOTP(
     email: string,
     maxVerificationRequest: number,
+    user: any,
     res: any,
   ) {
     try {
@@ -358,6 +377,7 @@ export class AuthRepository extends BaseRepository {
         });
       } catch (emailError) {
         await this.deleteEmailVerification(verificationRecord.id);
+        await this.deleteUserData(user?.profile?.user_id);
         console.error("Failed to send verification email", {
           email,
           error: emailError,
@@ -365,6 +385,7 @@ export class AuthRepository extends BaseRepository {
         return res.status(500).json({ error: "Failed to create user account" });
       }
     } catch (err) {
+      await this.deleteUserData(user?.profile?.user_id);
       console.error("Send verification error", { email, err });
       return res.status(500).json({ error: "Send verification error" });
     }
@@ -491,6 +512,7 @@ export class AuthRepository extends BaseRepository {
   }
 
   async findActiveOtpVerification(email: string, otpCode: string) {
+    await this.deleteExpiredEmailVerifications(new Date());
     const result = await this.database
       .select()
       .from(emailVerifications)
@@ -507,6 +529,7 @@ export class AuthRepository extends BaseRepository {
   }
 
   async findActiveResetOtpVerification(email: string, otpCode: string) {
+    await this.deleteExpiredResetEmailVerifications(new Date());
     const result = await this.database
       .select()
       .from(resetEmailVerifications)
@@ -566,6 +589,18 @@ export class AuthRepository extends BaseRepository {
       .returning();
 
     return identity ?? null;
+  }
+
+  async deleteExpiredResetEmailVerifications(now: Date) {
+    return this.database
+      .delete(resetEmailVerifications)
+      .where(
+        and(
+          lte(resetEmailVerifications.expires_at, now),
+          isNull(resetEmailVerifications.verified_at),
+        ),
+      )
+      .returning();
   }
 
   async deleteExpiredEmailVerifications(now: Date) {

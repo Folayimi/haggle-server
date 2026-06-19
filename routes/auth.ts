@@ -108,25 +108,22 @@ router.post("/signup", async (req: Request, res: Response) => {
     await authRepository.sendVerificationOTP(
       body?.email,
       MAX_VERIFICATION_REQUESTS_PER_WINDOW,
+      user,
       res,
     );
 
     // Generate tokens for the new user
-    const { accessToken, refreshToken } = generateTokens(
-      user?.profile?.user_id ?? "",
-    );
-
-    await authRepository.cleanupExpiredSessions();
+    const { resetToken } = generateResetToken(user?.profile?.user_id ?? "");
 
     await authRepository.createAuthSession(
       user?.profile?.user_id ?? "",
-      refreshToken,
+      resetToken,
     );
 
     return res.status(201).json({
       ...user,
       tokens: {
-        accessToken,
+        resetToken,
       },
       message: "Verificaition Code sent to your email",
       success: true,
@@ -450,7 +447,7 @@ router.post("/verify-email", async (req: Request, res: Response) => {
 
     return res.status(200).json({
       token: {
-        resetToken: session.refreshToken,
+        resetToken: session.resetToken,
       },
       message: "Reset OTP successfully sent to your email",
       success: true,
@@ -478,13 +475,13 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
 
   if (!token) {
     return res.status(401).json({
-      error: "UnAuthorized, token is requrired",
+      error: "UnAuthorized, token is required",
     });
   }
 
   const { email, otp_code: otpCode } = parsedBody.data;
 
-  const verify = verifyAccessToken(token);
+  const verify = await verifyResetToken(token);
 
   const user = authRepository.findUserById(verify?.userId);
 
@@ -526,6 +523,9 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
       verification.email,
     );
 
+    // revoke Auth Session
+    await authRepository.revokeAuthSession(token);
+
     return res.status(200).json({
       message: "Email verified! Your Account has been created.",
       success: true,
@@ -559,9 +559,9 @@ router.post("/verify-reset-otp", async (req: Request, res: Response) => {
 
   const { email, otp_code: otpCode } = parsedBody.data;
 
-  const verify = verifyResetToken(token);
+  const { userId } = await verifyResetToken(token);
 
-  const user = authRepository.findUserById(verify?.userId);
+  const user = authRepository.findUserById(userId);
 
   if (!user) {
     return res.status(401).json({
@@ -641,11 +641,13 @@ router.post("/password-reset", async (req: Request, res: Response) => {
       });
     }
 
-    // Find valid token
+    const { userId } = await verifyResetToken(token);
 
-    if (!resetToken) {
-      return res.status(400).json({
-        error: "Invalid or expired reset token",
+    const user = authRepository.findUserById(userId);
+
+    if (!user) {
+      return res.status(401).json({
+        error: "Invalid Token",
       });
     }
 
@@ -654,35 +656,10 @@ router.post("/password-reset", async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.hash(newPassword, saltRounds);
 
     // Update user's password
-    await db
-      .update(users)
-      .set({
-        password_hash: passwordHash,
-        updated_at: new Date(),
-      })
-      .where(eq(users.id, resetToken.user_id));
+    await authRepository.updateUserPassword(userId, passwordHash);
 
-    // Mark token as used
-    await db
-      .update(password_reset_tokens)
-      .set({
-        used: true,
-        used_at: new Date(),
-      })
-      .where(eq(password_reset_tokens.id, resetToken.id));
-
-    // Optional: Invalidate all other tokens for this user
-    await db
-      .update(password_reset_tokens)
-      .set({
-        used: true,
-      })
-      .where(
-        and(
-          eq(password_reset_tokens.user_id, resetToken.user_id),
-          eq(password_reset_tokens.used, false),
-        ),
-      );
+    // revoke Auth Session
+    await authRepository.revokeAuthSession(token);
 
     return res.status(200).json({
       success: true,

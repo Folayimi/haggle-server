@@ -85,11 +85,13 @@ export const verifyResetToken = async (
   token: string,
 ): Promise<{ userId: string }> => {
   try {
+    console.log('verifyyyyyyy:',token)
+
     const decoded = jwt.verify(token, JWT_ACCESS_SECRET) as TokenPayload;
     if (decoded.type !== "reset") {
       throw new Error("Invalid token type");
     }
-    console.log("decodded:", decoded);
+    console.log("decodded:", decoded, " token:",token);
     const [session] = await db
       .select()
       .from(authSessions)

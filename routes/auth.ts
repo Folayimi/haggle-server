@@ -446,7 +446,7 @@ router.post("/verify-email", async (req: Request, res: Response) => {
     );
 
     return res.status(200).json({
-      token: {
+      tokens: {
         resetToken: session.resetToken,
       },
       message: "Reset OTP successfully sent to your email",
@@ -561,6 +561,8 @@ router.post("/verify-reset-otp", async (req: Request, res: Response) => {
 
   const { userId } = await verifyResetToken(token);
 
+  console.log("emmaillllllll")
+
   const user = authRepository.findUserById(userId);
 
   if (!user) {
@@ -580,6 +582,8 @@ router.post("/verify-reset-otp", async (req: Request, res: Response) => {
       email,
       otpCode,
     );
+
+    console.log('verification:', verification)
 
     if (!verification || verification.expires_at <= new Date()) {
       return res.status(400).json({

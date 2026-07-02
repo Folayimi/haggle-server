@@ -8,7 +8,7 @@ import {
   listingServiceMeta,
 } from "../../src/db/schema/catalog";
 import { savedListings } from "../../src/db/schema/sessions";
-import { CategoryKind, ListingStatus, ListingType } from "../../src/db/schema";
+import { CategoryKind, ListingStatus, ListingType, NegotiationStyle } from "../../src/db/schema";
 
 const slugify = (value: string) =>
   value
@@ -31,10 +31,13 @@ export interface CreateListingInput {
   title: string;
   slug?: string;
   description: string;
-  price_amount: string;
+  starting_amount: string;
+  lowest_amount: string;
+  auto_decline_amount?: string;
   price_currency?: string;
   status?: (typeof ListingStatus)[keyof typeof ListingStatus];
-  is_negotiable?: boolean;
+  negotiation_style?: (typeof NegotiationStyle)[keyof typeof NegotiationStyle];
+  negotiation_note?: string;
   cover_media_id?: string;
 }
 

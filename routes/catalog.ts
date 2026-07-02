@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { catalogRepository } from "../storage";
 import { getRequestUserId } from "./http";
+import { NegotiationStyle } from "../src/db/schema";
 
 const router = Router();
 
@@ -74,10 +75,12 @@ router.post("/listings", async (req: Request, res: Response) => {
       title?: string;
       slug?: string;
       description?: string;
-      price_amount?: string;
-      price_currency?: string;
+      starting_amount?: string;
+      lowest_amount?: string;
+      auto_decline_amount?: string;
       status?: string;
-      is_negotiable?: boolean;
+      negotiation_style?: (typeof NegotiationStyle)[keyof typeof NegotiationStyle];
+      negotiation_note?: string;
       cover_media_id?: string;
     };
 
@@ -87,7 +90,10 @@ router.post("/listings", async (req: Request, res: Response) => {
       !body.category_id ||
       !body.title ||
       !body.description ||
-      !body.price_amount
+      !body.starting_amount ||
+      !body.lowest_amount ||
+      !body.negotiation_style ||
+      !body.negotiation_note
     ) {
       return res.status(400).json({ error: "Missing required listing fields" });
     }
@@ -99,10 +105,12 @@ router.post("/listings", async (req: Request, res: Response) => {
       title: body.title,
       slug: body.slug,
       description: body.description,
-      price_amount: body.price_amount,
-      price_currency: body.price_currency ?? "USD",
+      starting_amount: body.starting_amount,
+      lowest_amount: body.lowest_amount,
+      auto_decline_amount: body.auto_decline_amount,
       status: body.status as never,
-      is_negotiable: body.is_negotiable ?? true,
+      negotiation_style: body.negotiation_style as never,
+      negotiation_note: body.negotiation_note,
       cover_media_id: body.cover_media_id,
     });
 

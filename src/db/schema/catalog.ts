@@ -26,6 +26,7 @@ import {
   ListingStatus,
   ListingType,
   MediaType,
+  NegotiationStyle,
   ServiceDeliveryMode,
 } from "./enums";
 
@@ -38,7 +39,7 @@ export const categories = pgTable(
   "categories",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    parent_id: uuid("parent_id").references(():any => categories.id, {
+    parent_id: uuid("parent_id").references((): any => categories.id, {
       onDelete: "set null",
     }),
     name: text("name").notNull(),
@@ -83,13 +84,21 @@ export const listings = pgTable(
     title: text("title").notNull(),
     slug: text("slug").notNull(),
     description: text("description").notNull(),
-
+    conditions: text("conditions"), // e.g., "New", "Used", "Refurbished"
     // Pricing
-    price_amount: decimal("price_amount", {
+    starting_amount: decimal("starting_amount", {
       precision: 12,
       scale: 2,
     }).notNull(),
-    price_currency: text("price_currency").notNull().default("USD"),
+    lowest_amount: decimal("lowest_amount", {
+      precision: 12,
+      scale: 2,
+    }).notNull(),
+    auto_decline_amount: decimal("auto_decline_amount", {
+      precision: 12,
+      scale: 2,
+    }),
+    price_currency: text("price_currency").notNull().default("NGN"),
 
     // Listing state
     status: text("status", {
@@ -102,7 +111,6 @@ export const listings = pgTable(
     })
       .notNull()
       .default(ListingStatus.DRAFT),
-    is_negotiable: boolean("is_negotiable").notNull().default(true),
 
     // Media
     cover_media_id: uuid("cover_media_id"),
@@ -111,7 +119,16 @@ export const listings = pgTable(
     view_count: integer("view_count").notNull().default(0),
     save_count: integer("save_count").notNull().default(0),
     share_count: integer("share_count").notNull().default(0),
-
+    negotiation_style: text("negotiation_style", {
+      enum: [
+        NegotiationStyle.FIXED,
+        NegotiationStyle.NEGOTIABLE,
+        NegotiationStyle.COUNTER,
+      ],
+    })
+      .notNull()
+      .default(NegotiationStyle.NEGOTIABLE),
+    negotiation_note: text("negotiation_note"),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -157,7 +174,7 @@ export const listingMedia = pgTable(
     thumbnail_url: text("thumbnail_url"), // For videos, display a thumbnail
     sort_order: integer("sort_order").notNull().default(0),
     width: integer("width"),
-    height: integer("height"),
+    height: integer("height"), 
     duration_seconds: integer("duration_seconds"), // For videos
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()

@@ -63,6 +63,12 @@ export const ListingStatus = {
   ARCHIVED: "archived",
 } as const;
 
+export const NegotiationStyle = {
+  FIXED: "fixed",
+  NEGOTIABLE: "negotiable",
+  COUNTER: "counter",
+} as const;
+
 export const CategoryKind = {
   PRODUCT: "product",
   SERVICE: "service",

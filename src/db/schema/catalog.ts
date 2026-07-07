@@ -115,6 +115,8 @@ export const listings = pgTable(
     // Media
     cover_media_id: uuid("cover_media_id"),
 
+    tags: text("tags").notNull(), // Pipe Character-separated tags
+
     // Denormalized metrics for feed optimization
     view_count: integer("view_count").notNull().default(0),
     save_count: integer("save_count").notNull().default(0),
@@ -174,7 +176,7 @@ export const listingMedia = pgTable(
     thumbnail_url: text("thumbnail_url"), // For videos, display a thumbnail
     sort_order: integer("sort_order").notNull().default(0),
     width: integer("width"),
-    height: integer("height"), 
+    height: integer("height"),
     duration_seconds: integer("duration_seconds"), // For videos
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()

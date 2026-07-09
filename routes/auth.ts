@@ -91,13 +91,9 @@ router.post("/signup", async (req: Request, res: Response) => {
       password_hash:
         body.password && body.password.length > 0
           ? await bcrypt.hash(body.password, 10)
-          : undefined,
+          : "",
       provider: body.provider as never,
       provider_uid: body.provider_uid,
-      avatar_url: body.avatar_url,
-      bio: body.bio,
-      country_code: body.country_code,
-      city: body.city,
       response_time_label: body.response_time_label,
     });
 
@@ -242,6 +238,8 @@ router.post("/refresh-token", async (req: Request, res: Response) => {
       body.refreshToken,
     );
 
+    console.log('TEsting...', userId)
+
     // Generate new tokens
     const { accessToken, refreshToken: newRefreshToken } =
       generateTokens(userId);
@@ -317,48 +315,6 @@ router.post("/logout-all", async (req: Request, res: Response) => {
     console.error("Logout all error:", error);
     return res.status(500).json({
       error: "Failed to logout from all devices",
-    });
-  }
-});
-
-// GET CURRENT USER (Protected route example)
-router.get("/me", async (req: Request, res: Response) => {
-  try {
-    // Get token from Authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        error: "No token provided",
-      });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    // Verify access token
-    try {
-      const decoded = verifyAccessToken(token);
-      // Get user data
-      const user = await authRepository.findUserById(decoded.userId);
-
-      if (!user) {
-        return res.status(404).json({
-          error: "User not found",
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        ...user,
-      });
-    } catch (jwtError) {
-      return res.status(401).json({
-        error: "Invalid or expired token",
-      });
-    }
-  } catch (error) {
-    console.error("Get user error:", error);
-    return res.status(500).json({
-      error: "Failed to get user data",
     });
   }
 });

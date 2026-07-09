@@ -104,9 +104,8 @@ export const listings = pgTable(
     status: text("status", {
       enum: [
         ListingStatus.DRAFT,
-        ListingStatus.ACTIVE,
-        ListingStatus.PAUSED,
         ListingStatus.ARCHIVED,
+        ListingStatus.PUBLISHED,
       ],
     })
       .notNull()

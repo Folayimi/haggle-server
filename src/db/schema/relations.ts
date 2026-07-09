@@ -12,7 +12,6 @@ import { users } from "./auth";
 import { authIdentities, authOtps, userSessions } from "./auth";
 import {
   userProfiles,
-  sellerProfiles,
   userAddresses,
   userSettings,
 } from "./users";
@@ -61,10 +60,6 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   profile: one(userProfiles, {
     fields: [users.id],
     references: [userProfiles.user_id],
-  }),
-  seller_profile: one(sellerProfiles, {
-    fields: [users.id],
-    references: [sellerProfiles.user_id],
   }),
   settings: one(userSettings, {
     fields: [users.id],
@@ -160,16 +155,6 @@ export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
     references: [users.id],
   }),
 }));
-
-export const sellerProfilesRelations = relations(
-  sellerProfiles,
-  ({ one, many }) => ({
-    user: one(users, {
-      fields: [sellerProfiles.user_id],
-      references: [users.id],
-    }),
-  }),
-);
 
 export const userAddressesRelations = relations(userAddresses, ({ one }) => ({
   user: one(users, {

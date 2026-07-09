@@ -1,8 +1,9 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
-import { catalogRepository } from "../storage";
+import { authRepository, catalogRepository } from "../storage";
 import { getRequestUserId } from "./http";
 import { NegotiationStyle } from "../src/db/schema";
+import { verifyAccessToken } from "../services/tokenService";
 
 const router = Router();
 
@@ -68,16 +69,35 @@ router.get("/listings", async (req: Request, res: Response) => {
 
 router.post("/listings", async (req: Request, res: Response) => {
   try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "No token provided",
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    const decoded = verifyAccessToken(token);
+    // Get user data
+    const user = await authRepository.findUserById(decoded.userId);
+
+    if (!user) {
+      return res.status(401).json({
+        error: "UnAuthorized Access: User not found",
+      });
+    }
+
     const body = req.body as {
       seller_id?: string;
       listing_type?: string;
       category_id?: string;
       title?: string;
-      slug?: string;
       description?: string;
       starting_amount?: string;
       lowest_amount?: string;
       auto_decline_amount?: string;
+      tags?: string;
       status?: string;
       negotiation_style?: (typeof NegotiationStyle)[keyof typeof NegotiationStyle];
       negotiation_note?: string;
@@ -93,7 +113,7 @@ router.post("/listings", async (req: Request, res: Response) => {
       !body.starting_amount ||
       !body.lowest_amount ||
       !body.negotiation_style ||
-      !body.negotiation_note
+      !body.tags
     ) {
       return res.status(400).json({ error: "Missing required listing fields" });
     }
@@ -103,18 +123,23 @@ router.post("/listings", async (req: Request, res: Response) => {
       listing_type: body.listing_type as never,
       category_id: body.category_id,
       title: body.title,
-      slug: body.slug,
+      slug: body.title.toLowerCase().replace(/\s+/g, "-") ?? "", // Simple slug generation
       description: body.description,
       starting_amount: body.starting_amount,
       lowest_amount: body.lowest_amount,
       auto_decline_amount: body.auto_decline_amount,
+      tags: body.tags,
       status: body.status as never,
       negotiation_style: body.negotiation_style as never,
       negotiation_note: body.negotiation_note,
       cover_media_id: body.cover_media_id,
     });
 
-    return res.status(201).json(listing);
+    return res.status(201).json({
+      message: "Listing created successfully",
+      success: true,
+      data: listing,
+    });
   } catch (error) {
     return res
       .status(500)

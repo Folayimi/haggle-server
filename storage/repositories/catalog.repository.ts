@@ -34,6 +34,7 @@ export interface CreateListingInput {
   starting_amount: string;
   lowest_amount: string;
   auto_decline_amount?: string;
+  tags: string;
   price_currency?: string;
   status?: (typeof ListingStatus)[keyof typeof ListingStatus];
   negotiation_style?: (typeof NegotiationStyle)[keyof typeof NegotiationStyle];

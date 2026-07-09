@@ -20,7 +20,7 @@ import {
   jsonb,
 } from "drizzle-orm/pg-core";
 import { users } from "./auth";
-import { SellerVerificationStatus } from "./enums";
+import { SellerVerificationStatus, UserPrimaryRole, UserStatus } from "./enums";
 
 /**
  * USER_PROFILES TABLE
@@ -35,37 +35,26 @@ export const userProfiles = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     full_name: text("full_name").notNull(),
     username: text("username").notNull().unique(),
+    email: text("email").notNull().unique(),
+    status: text("status", {
+      enum: [UserStatus.ACTIVE, UserStatus.SUSPENDED, UserStatus.DELETED],
+    })
+      .notNull()
+      .default(UserStatus.ACTIVE),
+    primary_role: text("primary_role", {
+      enum: [
+        UserPrimaryRole.BUYER,
+        UserPrimaryRole.SELLER,
+        UserPrimaryRole.BOTH,
+      ],
+    })
+      .notNull()
+      .default(UserPrimaryRole.BUYER),
     avatar_url: text("avatar_url"),
     bio: text("bio"),
     country_code: text("country_code"), // e.g., 'US', 'NG', 'UK'
     city: text("city"),
-    response_time_label: text("response_time_label"), // e.g., 'Usually responds in 2 hours'
-    created_at: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updated_at: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-  },
-  (table) => ({
-    usernameIdx: index("user_profiles_username_idx").on(table.username),
-    countryIdx: index("user_profiles_country_code_idx").on(table.country_code),
-  }),
-);
-
-/**
- * SELLER_PROFILES TABLE
- * Seller-only presentation and business information.
- * Denormalized cached counts for feed performance.
- */
-export const sellerProfiles = pgTable(
-  "seller_profiles",
-  {
-    user_id: uuid("user_id")
-      .primaryKey()
-      .references(() => users.id, { onDelete: "cascade" }),
-    business_name: text("business_name").notNull(),
+    business_name: text("business_name"),
     trade_mark: text("trade_mark"), // Optional trademark
     cover_image_url: text("cover_image_url"), // Shop banner
     sells_summary: text("sells_summary"), // Brief description of what they sell
@@ -87,6 +76,7 @@ export const sellerProfiles = pgTable(
       .notNull()
       .default(0),
 
+    response_time_label: text("response_time_label"), // e.g., 'Usually responds in 2 hours'
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -96,7 +86,9 @@ export const sellerProfiles = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => ({
-    verificationStatusIdx: index("seller_profiles_verification_status_idx").on(
+    usernameIdx: index("user_profiles_username_idx").on(table.username),
+    countryIdx: index("user_profiles_country_code_idx").on(table.country_code),
+    verificationStatusIdx: index("user_profiles_verification_status_idx").on(
       table.verification_status,
     ),
   }),
@@ -168,9 +160,6 @@ export const userSettings = pgTable("user_settings", {
 // Type inference for INSERT and SELECT operations
 export type InsertUserProfile = typeof userProfiles.$inferInsert;
 export type SelectUserProfile = typeof userProfiles.$inferSelect;
-
-export type InsertSellerProfile = typeof sellerProfiles.$inferInsert;
-export type SelectSellerProfile = typeof sellerProfiles.$inferSelect;
 
 export type InsertUserAddress = typeof userAddresses.$inferInsert;
 export type SelectUserAddress = typeof userAddresses.$inferSelect;

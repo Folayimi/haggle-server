@@ -2,7 +2,6 @@ import { and, desc, eq } from "drizzle-orm";
 import { BaseRepository } from "./base.repository";
 import { users } from "../../src/db/schema/auth";
 import {
-  sellerProfiles,
   userAddresses,
   userProfiles,
   userSettings,
@@ -15,6 +14,7 @@ export interface UpdateCurrentUserInput {
   primary_role?: (typeof UserPrimaryRole)[keyof typeof UserPrimaryRole];
   status?: (typeof UserStatus)[keyof typeof UserStatus];
   full_name?: string;
+  email?: string;
   username?: string;
   avatar_url?: string;
   bio?: string;
@@ -32,6 +32,10 @@ export interface UpdateCurrentUserInput {
   trade_mark?: string;
   cover_image_url?: string;
   sells_summary?: string;
+  rating_avg?: string; // 0.00 - 5.00
+  rating_count?: number; // number of ratings received
+  follower_count?: number; // number of followers
+  completed_sales_count?: number; // number of completed sales
 }
 
 export interface CreateAddressInput {
@@ -50,7 +54,7 @@ export interface CreateAddressInput {
 
 export class UsersRepository extends BaseRepository {
   async getUserById(userId: string) {
-    const [user, profile, settings, sellerProfile] = await Promise.all([
+    const [user, profile, settings] = await Promise.all([
       this.database.select().from(users).where(eq(users.id, userId)),
       this.database
         .select()
@@ -60,10 +64,6 @@ export class UsersRepository extends BaseRepository {
         .select()
         .from(userSettings)
         .where(eq(userSettings.user_id, userId)),
-      this.database
-        .select()
-        .from(sellerProfiles)
-        .where(eq(sellerProfiles.user_id, userId)),
     ]);
 
     if (user.length === 0) {
@@ -74,7 +74,6 @@ export class UsersRepository extends BaseRepository {
       ...user[0],
       profile: profile[0] ?? null,
       settings: settings[0] ?? null,
-      seller_profile: sellerProfile[0] ?? null,
     };
   }
 
@@ -99,6 +98,14 @@ export class UsersRepository extends BaseRepository {
       bio: input.bio,
       country_code: input.country_code,
       city: input.city,
+      business_name: input.business_name,
+      trade_mark: input.trade_mark,
+      cover_image_url: input.cover_image_url,
+      sells_summary: input.sells_summary,
+      rating_avg: input.rating_avg, // 0.,00 - 5.00
+      rating_count: input.rating_count, // number of ratings received
+      follower_count: input.follower_count, // number of followers
+      completed_sales_count: input.completed_sales_count, // number of completed sales
       response_time_label: input.response_time_label,
       updated_at: new Date(),
     });
@@ -112,12 +119,21 @@ export class UsersRepository extends BaseRepository {
       if (existingProfile.length === 0) {
         await this.database.insert(userProfiles).values({
           user_id: userId,
-          full_name: input.full_name ?? "New User",
-          username: input.username ?? `user_${userId.slice(0, 8)}`,
+          full_name: input.full_name ?? "New----User",
+          username: input.username ?? "new_user",
+          email: input.email ?? "sample@gmail.com",
           avatar_url: input.avatar_url,
           bio: input.bio,
           country_code: input.country_code,
           city: input.city,
+          business_name: input.business_name,
+          trade_mark: input.trade_mark,
+          cover_image_url: input.cover_image_url,
+          sells_summary: input.sells_summary,
+          rating_avg: input.rating_avg, // 0.,00 - 5.00
+          rating_count: input.rating_count ?? 0, // number of ratings received
+          follower_count: input.follower_count ?? 0, // number of followers
+          completed_sales_count: input.completed_sales_count ?? 0, // number of completed sales
           response_time_label: input.response_time_label,
         });
       } else {
@@ -163,37 +179,6 @@ export class UsersRepository extends BaseRepository {
           .where(eq(userSettings.user_id, userId));
       }
     }
-
-    const sellerValues = this.pickDefined({
-      business_name: input.business_name,
-      trade_mark: input.trade_mark,
-      cover_image_url: input.cover_image_url,
-      sells_summary: input.sells_summary,
-      updated_at: new Date(),
-    });
-
-    if (Object.keys(sellerValues).length > 1) {
-      const existingSeller = await this.database
-        .select()
-        .from(sellerProfiles)
-        .where(eq(sellerProfiles.user_id, userId));
-
-      if (existingSeller.length === 0) {
-        await this.database.insert(sellerProfiles).values({
-          user_id: userId,
-          business_name: input.business_name ?? "New Seller",
-          trade_mark: input.trade_mark,
-          cover_image_url: input.cover_image_url,
-          sells_summary: input.sells_summary,
-        });
-      } else {
-        await this.database
-          .update(sellerProfiles)
-          .set(sellerValues)
-          .where(eq(sellerProfiles.user_id, userId));
-      }
-    }
-
     return this.getUserById(userId);
   }
 

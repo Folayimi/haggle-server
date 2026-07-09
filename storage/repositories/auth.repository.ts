@@ -45,15 +45,11 @@ export interface CreateUserAccountInput {
   username: string;
   primary_role?: (typeof UserPrimaryRole)[keyof typeof UserPrimaryRole];
   status?: (typeof UserStatus)[keyof typeof UserStatus];
-  email?: string;
+  email: string;
   phone_e164?: string;
-  password_hash?: string;
+  password_hash: string;
   provider?: (typeof AuthProvider)[keyof typeof AuthProvider];
   provider_uid?: string;
-  avatar_url?: string;
-  bio?: string;
-  country_code?: string;
-  city?: string;
   response_time_label?: string;
 }
 
@@ -86,11 +82,10 @@ export class AuthRepository extends BaseRepository {
     const profileValues: InsertUserProfile = {
       user_id: user.id,
       full_name: input.full_name,
+      status:input.status,
+      primary_role:input.primary_role,
+      email:input.email,
       username: input.username,
-      avatar_url: input.avatar_url,
-      bio: input.bio,
-      country_code: input.country_code,
-      city: input.city,
       response_time_label: input.response_time_label,
     };
 

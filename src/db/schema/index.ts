@@ -40,13 +40,10 @@ export {
 // User Profiles
 export {
   userProfiles,
-  sellerProfiles,
   userAddresses,
   userSettings,
   type InsertUserProfile,
   type SelectUserProfile,
-  type InsertSellerProfile,
-  type SelectSellerProfile,
   type InsertUserAddress,
   type SelectUserAddress,
   type InsertUserSettings,

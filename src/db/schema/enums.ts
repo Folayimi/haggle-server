@@ -58,9 +58,8 @@ export const ListingType = {
 
 export const ListingStatus = {
   DRAFT: "draft",
-  ACTIVE: "active",
-  PAUSED: "paused",
   ARCHIVED: "archived",
+  PUBLISHED: 'published'
 } as const;
 
 export const NegotiationStyle = {

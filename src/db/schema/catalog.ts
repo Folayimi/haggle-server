@@ -23,6 +23,7 @@ import {
 import { users } from "./auth";
 import {
   CategoryKind,
+  CategoryStatus,
   ListingStatus,
   ListingType,
   MediaType,
@@ -49,6 +50,11 @@ export const categories = pgTable(
     })
       .notNull()
       .default(CategoryKind.BOTH),
+    status: text("status", {
+      enum: [CategoryStatus.DRAFT, CategoryStatus.PUBLISHED],
+    })
+      .notNull()
+      .default(ListingStatus.DRAFT),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -8,7 +8,7 @@ import {
   listingServiceMeta,
 } from "../../src/db/schema/catalog";
 import { savedListings } from "../../src/db/schema/sessions";
-import { CategoryKind, ListingStatus, ListingType, NegotiationStyle } from "../../src/db/schema";
+import { CategoryKind, CategoryStatus, ListingStatus, ListingType, NegotiationStyle } from "../../src/db/schema";
 
 const slugify = (value: string) =>
   value
@@ -21,6 +21,7 @@ export interface CreateCategoryInput {
   name: string;
   slug?: string;
   kind: (typeof CategoryKind)[keyof typeof CategoryKind];
+  status: (typeof CategoryStatus)[keyof typeof CategoryStatus];
   parent_id?: string;
 }
 

@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { EmailVerificationType } from "../src/db/schema";
 
-export const EMAIL_VERIFICATION_EXPIRY_MINUTES = 15;
+export const EMAIL_VERIFICATION_EXPIRY_MINUTES =  144; // 24 hours in minutes
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 
 interface VerificationJwtPayload {

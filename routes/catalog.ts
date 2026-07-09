@@ -32,6 +32,7 @@ router.post("/categories", async (req: Request, res: Response) => {
       name?: string;
       slug?: string;
       kind?: string;
+      status?: string;
       parent_id?: string;
     };
 
@@ -43,10 +44,15 @@ router.post("/categories", async (req: Request, res: Response) => {
       name: body.name,
       slug: body.slug,
       kind: body.kind as never,
+      status: body.status as never,
       parent_id: body.parent_id,
     });
 
-    return res.status(201).json(category);
+    return res.status(201).json({
+      success: true,
+      message: "Category Created Successfully",
+      data: category,
+    });
   } catch (error) {
     return res
       .status(500)

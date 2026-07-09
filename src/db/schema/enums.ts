@@ -62,6 +62,11 @@ export const ListingStatus = {
   PUBLISHED: 'published'
 } as const;
 
+export const CategoryStatus = {
+  DRAFT: "draft",  
+  PUBLISHED: 'published'
+} as const;
+
 export const NegotiationStyle = {
   FIXED: "fixed",
   NEGOTIABLE: "negotiable",

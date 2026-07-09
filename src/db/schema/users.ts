@@ -142,7 +142,7 @@ export const userSettings = pgTable("user_settings", {
   sms_enabled: boolean("sms_enabled").notNull().default(true),
   email_enabled: boolean("email_enabled").notNull().default(true),
   show_online_status: boolean("show_online_status").notNull().default(true),
-  preferred_currency: text("preferred_currency").notNull().default("USD"), // ISO 4217 code
+  preferred_currency: text("preferred_currency").notNull().default("NGN"), // ISO 4217 code
   preferred_role: text("preferred_role").notNull().default("buyer"), // For dual-role users
 
   // Seller-specific preferences stored as JSON for flexibility

@@ -25,7 +25,7 @@ interface ResetToken {
 // Validate required environment variables on startup
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
-const RESET_TOKEN_EXPIRY = process.env.RESET_TOKEN_EXPIRY || "10m";
+const RESET_TOKEN_EXPIRY = process.env.RESET_TOKEN_EXPIRY || "15m";
 const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "15m";
 const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY || "7d";
 
@@ -85,7 +85,6 @@ export const verifyResetToken = async (
   token: string,
 ): Promise<{ userId: string }> => {
   try {
-
     const decoded = jwt.verify(token, JWT_ACCESS_SECRET) as TokenPayload;
     if (decoded.type !== "reset") {
       throw new Error("Invalid token type");

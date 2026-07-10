@@ -90,16 +90,15 @@ export const listings = pgTable(
     title: text("title").notNull(),
     slug: text("slug").notNull(),
     description: text("description").notNull(),
-    conditions: text("conditions"), // e.g., "New", "Used", "Refurbished"
     // Pricing
     starting_amount: decimal("starting_amount", {
       precision: 12,
       scale: 2,
-    }).notNull(),
+    }),
     lowest_amount: decimal("lowest_amount", {
       precision: 12,
       scale: 2,
-    }).notNull(),
+    }),
     auto_decline_amount: decimal("auto_decline_amount", {
       precision: 12,
       scale: 2,

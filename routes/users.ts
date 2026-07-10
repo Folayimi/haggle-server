@@ -57,7 +57,11 @@ router.put("/me", async (req: Request, res: Response) => {
     }
 
     const user = await usersRepository.updateCurrentUser(userId, req.body);
-    return res.json(user);
+    return res.json({
+      success: true,
+      message: "user profile updaed successfully",
+      data: user,
+    });
   } catch (error) {
     return res
       .status(500)

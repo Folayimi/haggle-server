@@ -8,7 +8,13 @@ import {
   listingServiceMeta,
 } from "../../src/db/schema/catalog";
 import { savedListings } from "../../src/db/schema/sessions";
-import { CategoryKind, CategoryStatus, ListingStatus, ListingType, NegotiationStyle } from "../../src/db/schema";
+import {
+  CategoryKind,
+  CategoryStatus,
+  ListingStatus,
+  ListingType,
+  NegotiationStyle,
+} from "../../src/db/schema";
 
 const slugify = (value: string) =>
   value
@@ -32,8 +38,8 @@ export interface CreateListingInput {
   title: string;
   slug?: string;
   description: string;
-  starting_amount: string;
-  lowest_amount: string;
+  starting_amount?: string;
+  lowest_amount?: string;
   auto_decline_amount?: string;
   tags: string;
   price_currency?: string;
@@ -60,6 +66,23 @@ export class CatalogRepository extends BaseRepository {
     return category;
   }
 
+  async getCategoryBySlug(slug: string) {
+    const category = await this.database
+      .select()
+      .from(categories)
+      .where(eq(categories.slug, slug));
+    
+    console.log('checked category', category)
+
+    if (category.length === 0) {
+      return null;
+    }
+
+    return {
+      ...category[0],
+    };
+  }
+
   async listListings(sellerId?: string) {
     if (sellerId) {
       return this.database
@@ -69,7 +92,10 @@ export class CatalogRepository extends BaseRepository {
         .orderBy(desc(listings.created_at));
     }
 
-    return this.database.select().from(listings).orderBy(desc(listings.created_at));
+    return this.database
+      .select()
+      .from(listings)
+      .orderBy(desc(listings.created_at));
   }
 
   async getListingById(listingId: string) {
@@ -141,7 +167,10 @@ export class CatalogRepository extends BaseRepository {
   }
 
   async addListingMedia(input: typeof listingMedia.$inferInsert) {
-    const [media] = await this.database.insert(listingMedia).values(input).returning();
+    const [media] = await this.database
+      .insert(listingMedia)
+      .values(input)
+      .returning();
     return media;
   }
 

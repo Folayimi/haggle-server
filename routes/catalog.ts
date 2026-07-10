@@ -2,8 +2,9 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { authRepository, catalogRepository } from "../storage";
 import { getRequestUserId } from "./http";
-import { NegotiationStyle } from "../src/db/schema";
+import { ListingStatus, ListingType, NegotiationStyle } from "../src/db/schema";
 import { verifyAccessToken } from "../services/tokenService";
+import { sanitizeNumericFields } from "../utils/sanitize";
 
 const router = Router();
 
@@ -26,6 +27,25 @@ router.get("/categories", async (_req: Request, res: Response) => {
   }
 });
 
+router.get("/categories/:slug", async (req: Request, res: Response) => {
+  try {
+    const category = await catalogRepository.getCategoryBySlug(req.params.slug);
+    console.log("category", category);
+    if (!category) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+    return res.json({
+      success: true,
+      message: "category found",
+      data: category,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: "Failed to fetch category", details: error });
+  }
+});
+
 router.post("/categories", async (req: Request, res: Response) => {
   try {
     const body = req.body as {
@@ -37,6 +57,7 @@ router.post("/categories", async (req: Request, res: Response) => {
     };
 
     if (!body.name || !body.kind) {
+      console.log("details :", body);
       return res.status(400).json({ error: "name and kind are required" });
     }
 
@@ -96,7 +117,7 @@ router.post("/listings", async (req: Request, res: Response) => {
 
     const body = req.body as {
       seller_id?: string;
-      listing_type?: string;
+      listing_type?: (typeof ListingType)[keyof typeof ListingType];
       category_id?: string;
       title?: string;
       description?: string;
@@ -104,41 +125,43 @@ router.post("/listings", async (req: Request, res: Response) => {
       lowest_amount?: string;
       auto_decline_amount?: string;
       tags?: string;
-      status?: string;
+      status?: (typeof ListingStatus)[keyof typeof ListingStatus];
       negotiation_style?: (typeof NegotiationStyle)[keyof typeof NegotiationStyle];
       negotiation_note?: string;
       cover_media_id?: string;
     };
 
+    // 1. Sanitize numeric fields
+    const sanitizedBody = sanitizeNumericFields(body);
+
+    // 2. Validate required fields (using sanitizedBody)
     if (
-      !body.seller_id ||
-      !body.listing_type ||
-      !body.category_id ||
-      !body.title ||
-      !body.description ||
-      !body.starting_amount ||
-      !body.lowest_amount ||
-      !body.negotiation_style ||
-      !body.tags
+      !sanitizedBody.seller_id ||
+      !sanitizedBody.listing_type ||
+      !sanitizedBody.category_id ||
+      !sanitizedBody.title ||
+      !sanitizedBody.description ||
+      !sanitizedBody.tags
     ) {
       return res.status(400).json({ error: "Missing required listing fields" });
     }
 
     const listing = await catalogRepository.createListing({
-      seller_id: body.seller_id,
-      listing_type: body.listing_type as never,
-      category_id: body.category_id,
-      title: body.title,
-      slug: body.title.toLowerCase().replace(/\s+/g, "-") ?? "", // Simple slug generation
-      description: body.description,
-      starting_amount: body.starting_amount,
-      lowest_amount: body.lowest_amount,
-      auto_decline_amount: body.auto_decline_amount,
-      tags: body.tags,
-      status: body.status as never,
-      negotiation_style: body.negotiation_style as never,
-      negotiation_note: body.negotiation_note,
-      cover_media_id: body.cover_media_id,
+      seller_id: sanitizedBody.seller_id,
+      listing_type: sanitizedBody.listing_type,
+      category_id: sanitizedBody.category_id,
+      title: sanitizedBody.title,
+      // Let the repository generate the slug if not provided, or pass it
+      slug: sanitizedBody.title.toLowerCase().replace(/\s+/g, "-") ?? "", // optional
+      description: sanitizedBody.description,
+      starting_amount: sanitizedBody.starting_amount, // now null if was empty
+      lowest_amount: sanitizedBody.lowest_amount, // now null if was empty
+      auto_decline_amount: sanitizedBody.auto_decline_amount, // now null if was empty
+      tags: sanitizedBody.tags,
+      status: sanitizedBody.status,
+      negotiation_style: sanitizedBody.negotiation_style,
+      negotiation_note: sanitizedBody.negotiation_note,
+      cover_media_id: sanitizedBody.cover_media_id,
     });
 
     return res.status(201).json({
@@ -170,15 +193,23 @@ router.get("/listings/:id", async (req: Request, res: Response) => {
 
 router.patch("/listings/:id", async (req: Request, res: Response) => {
   try {
+    if (!req.params.id) {
+      return res.status(401).json({ error: "listing Id is required" });
+    }
     const listing = await catalogRepository.updateListing(
       req.params.id,
       req.body,
     );
+
     if (!listing) {
       return res.status(404).json({ error: "Listing not found" });
     }
 
-    return res.json(listing);
+    return res.json({
+      success: true,
+      message: "listing updated successfully",
+      data: listing,
+    });
   } catch (error) {
     return res
       .status(500)

@@ -49,19 +49,41 @@ router.get("/me", async (req: Request, res: Response) => {
 
 router.put("/me", async (req: Request, res: Response) => {
   try {
-    const userId = getRequestUserId(req);
-    if (!userId) {
-      return res
-        .status(400)
-        .json({ error: "x-user-id header or userId is required" });
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "No token provided",
+      });
     }
 
-    const user = await usersRepository.updateCurrentUser(userId, req.body);
-    return res.json({
-      success: true,
-      message: "user profile updaed successfully",
-      data: user,
-    });
+    const token = authHeader.split(" ")[1];
+
+    // Verify access token
+    try {
+      const decoded = verifyAccessToken(token);
+      // Get user data
+      const userData = await usersRepository.getUserById(decoded.userId);
+
+      if (!userData) {
+        return res.status(401).json({
+          error: "Invalid Token",
+        });
+      }
+
+      const user = await usersRepository.updateCurrentUser(
+        userData?.profile?.user_id,
+        req.body,
+      );
+      return res.json({
+        success: true,
+        message: "user profile updaed successfully",
+        data: user,
+      });
+    } catch (jwtError) {
+      return res.status(401).json({
+        error: "Invalid or expired token",
+      });
+    }
   } catch (error) {
     return res
       .status(500)

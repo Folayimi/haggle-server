@@ -70,9 +70,7 @@ export class CatalogRepository extends BaseRepository {
     const category = await this.database
       .select()
       .from(categories)
-      .where(eq(categories.slug, slug));
-    
-    console.log('checked category', category)
+      .where(eq(categories.slug, slug));    
 
     if (category.length === 0) {
       return null;

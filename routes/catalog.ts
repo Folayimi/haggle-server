@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
-import { authRepository, catalogRepository } from "../storage";
+import { authRepository, catalogRepository, usersRepository } from "../storage";
 import { getRequestUserId } from "./http";
 import { ListingStatus, ListingType, NegotiationStyle } from "../src/db/schema";
 import { verifyAccessToken } from "../services/tokenService";
@@ -29,16 +29,41 @@ router.get("/categories", async (_req: Request, res: Response) => {
 
 router.get("/categories/:slug", async (req: Request, res: Response) => {
   try {
-    const category = await catalogRepository.getCategoryBySlug(req.params.slug);
-    console.log("category", category);
-    if (!category) {
-      return res.status(404).json({ error: "Category not found" });
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "No token provided",
+      });
     }
-    return res.json({
-      success: true,
-      message: "category found",
-      data: category,
-    });
+
+    const token = authHeader.split(" ")[1];
+    try {
+      const decoded = verifyAccessToken(token);
+      // Get user data
+      const userData = await usersRepository.getUserById(decoded.userId);
+
+      if (!userData) {
+        return res.status(401).json({
+          error: "Invalid Token",
+        });
+      }
+
+      const category = await catalogRepository.getCategoryBySlug(
+        req.params.slug,
+      );      
+      if (!category) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+      return res.json({
+        success: true,
+        message: "category found",
+        data: category,
+      });
+    } catch (jwtError) {
+      return res.status(401).json({
+        error: "Invalid or expired token",
+      });
+    }
   } catch (error) {
     return res
       .status(500)
@@ -48,32 +73,56 @@ router.get("/categories/:slug", async (req: Request, res: Response) => {
 
 router.post("/categories", async (req: Request, res: Response) => {
   try {
-    const body = req.body as {
-      name?: string;
-      slug?: string;
-      kind?: string;
-      status?: string;
-      parent_id?: string;
-    };
-
-    if (!body.name || !body.kind) {
-      console.log("details :", body);
-      return res.status(400).json({ error: "name and kind are required" });
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "No token provided",
+      });
     }
 
-    const category = await catalogRepository.createCategory({
-      name: body.name,
-      slug: body.slug,
-      kind: body.kind as never,
-      status: body.status as never,
-      parent_id: body.parent_id,
-    });
+    const token = authHeader.split(" ")[1];
 
-    return res.status(201).json({
-      success: true,
-      message: "Category Created Successfully",
-      data: category,
-    });
+    try {
+      const decoded = verifyAccessToken(token);
+      // Get user data
+      const userData = await usersRepository.getUserById(decoded.userId);
+
+      if (!userData) {
+        return res.status(401).json({
+          error: "Invalid Token",
+        });
+      }
+
+      const body = req.body as {
+        name?: string;
+        slug?: string;
+        kind?: string;
+        status?: string;
+        parent_id?: string;
+      };
+
+      if (!body.name || !body.kind) {        
+        return res.status(400).json({ error: "name and kind are required" });
+      }
+
+      const category = await catalogRepository.createCategory({
+        name: body.name,
+        slug: body.slug,
+        kind: body.kind as never,
+        status: body.status as never,
+        parent_id: body.parent_id,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: "Category Created Successfully",
+        data: category,
+      });
+    } catch (jwtError) {
+      return res.status(401).json({
+        error: "Invalid or expired token",
+      });
+    }
   } catch (error) {
     return res
       .status(500)
@@ -196,20 +245,47 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
     if (!req.params.id) {
       return res.status(401).json({ error: "listing Id is required" });
     }
-    const listing = await catalogRepository.updateListing(
-      req.params.id,
-      req.body,
-    );
 
-    if (!listing) {
-      return res.status(404).json({ error: "Listing not found" });
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "No token provided",
+      });
     }
 
-    return res.json({
-      success: true,
-      message: "listing updated successfully",
-      data: listing,
-    });
+    const token = authHeader.split(" ")[1];
+
+    // Verify access token
+    try {
+      const decoded = verifyAccessToken(token);
+      // Get user data
+      const userData = await usersRepository.getUserById(decoded.userId);
+
+      if (!userData) {
+        return res.status(401).json({
+          error: "Invalid Token",
+        });
+      }
+
+      const listing = await catalogRepository.updateListing(
+        req.params.id,
+        req.body,
+      );
+
+      if (!listing) {
+        return res.status(404).json({ error: "Listing not found" });
+      }
+
+      return res.json({
+        success: true,
+        message: "listing updated successfully",
+        data: listing,
+      });
+    } catch (jwtError) {
+      return res.status(401).json({
+        error: "Invalid or expired token",
+      });
+    }
   } catch (error) {
     return res
       .status(500)

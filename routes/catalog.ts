@@ -50,7 +50,7 @@ router.get("/categories/:slug", async (req: Request, res: Response) => {
 
       const category = await catalogRepository.getCategoryBySlug(
         req.params.slug,
-      );      
+      );
       if (!category) {
         return res.status(404).json({ error: "Category not found" });
       }
@@ -101,7 +101,7 @@ router.post("/categories", async (req: Request, res: Response) => {
         parent_id?: string;
       };
 
-      if (!body.name || !body.kind) {        
+      if (!body.name || !body.kind) {
         return res.status(400).json({ error: "name and kind are required" });
       }
 
@@ -309,106 +309,127 @@ router.post(
   "/listings/:id/media",
   upload.single("file"),
   async (req: Request, res: Response) => {
+    if (!req.params.id) {
+      return res.status(401).json({ error: "listing Id is required" });
+    }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "No token provided",
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
     try {
-      let mediaUrl: string | undefined;
-      let mediaType: string | undefined;
-      let thumbnailUrl: string | undefined;
+      try {
+        const decoded = verifyAccessToken(token);
+        // Get user data
+        const userData = await usersRepository.getUserById(decoded.userId);
 
-      const body = req.body as {
-        media_type?: string;
-        url?: string;
-        thumbnail_url?: string;
-        sort_order?: number;
-        width?: number;
-        height?: number;
-        duration_seconds?: number;
-      };
-
-      // Handle file upload (multipart/form-data)
-      if (req.file) {
-        mediaType = body.media_type;
-
-        if (!mediaType) {
-          return res
-            .status(400)
-            .json({ error: "media_type is required when uploading a file" });
+        if (!userData) {
+          return res.status(401).json({
+            error: "Invalid Token",
+          });
         }
 
-        // Validate media_type
-        if (!["IMAGE", "VIDEO"].includes(mediaType)) {
-          return res
-            .status(400)
-            .json({ error: "media_type must be either IMAGE or VIDEO" });
+        let mediaUrl: string | undefined;
+        let mediaType: string | undefined;
+        let thumbnailUrl: string | undefined;
+
+        const body = req.body as {
+          media_type?: string;
+          url?: string;
+          thumbnail_url?: string;
+          sort_order?: number;
+          width?: number;
+          height?: number;
+          duration_seconds?: number;
+        };
+
+        // Handle file upload (multipart/form-data)
+        if (req.file) {
+          mediaType = body.media_type;
+
+          if (!mediaType) {
+            return res
+              .status(400)
+              .json({ error: "media_type is required when uploading a file" });
+          }
+
+          // Validate media_type
+          if (!["IMAGE", "VIDEO"].includes(mediaType)) {
+            return res
+              .status(400)
+              .json({ error: "media_type must be either IMAGE or VIDEO" });
+          }
+
+          // Generate file URL (in production, upload to S3, Azure Blob, etc.)
+          // For now, we'll create a local file path
+          const timestamp = Date.now();
+          const fileName = `${req.params.id}-${timestamp}-${req.file.originalname}`;
+          mediaUrl = `/media/${fileName}`;
+
+          // In production, you would:
+          // 1. Upload req.file.buffer to S3/cloud storage
+          // 2. Get the returned URL
+          // Example: mediaUrl = await uploadToS3(req.file.buffer, fileName);
+        }
+        // Handle URL-based media (JSON)
+        else if (body.url) {
+          mediaType = body.media_type;
+          mediaUrl = body.url;
+
+          if (!mediaType || !mediaUrl) {
+            return res
+              .status(400)
+              .json({ error: "media_type and url are required" });
+          }
+
+          // Validate media_type
+          if (!["IMAGE", "VIDEO"].includes(mediaType)) {
+            return res
+              .status(400)
+              .json({ error: "media_type must be either IMAGE or VIDEO" });
+          }
+
+          // Set thumbnail URL if provided
+          thumbnailUrl = body.thumbnail_url;
+        } else {
+          return res.status(400).json({
+            error:
+              "Either upload a file or provide a URL. Provide media_type in both cases.",
+          });
         }
 
-        // Generate file URL (in production, upload to S3, Azure Blob, etc.)
-        // For now, we'll create a local file path
-        const timestamp = Date.now();
-        const fileName = `${req.params.id}-${timestamp}-${req.file.originalname}`;
-        mediaUrl = `/media/${fileName}`;
-
-        // In production, you would:
-        // 1. Upload req.file.buffer to S3/cloud storage
-        // 2. Get the returned URL
-        // Example: mediaUrl = await uploadToS3(req.file.buffer, fileName);
-      }
-      // Handle URL-based media (JSON)
-      else if (body.url) {
-        mediaType = body.media_type;
-        mediaUrl = body.url;
-
-        if (!mediaType || !mediaUrl) {
-          return res
-            .status(400)
-            .json({ error: "media_type and url are required" });
+        // Verify listing exists
+        const listing = await catalogRepository.getListingById(req.params.id);
+        if (!listing) {
+          return res.status(404).json({ error: "Listing not found" });
         }
 
-        // Validate media_type
-        if (!["IMAGE", "VIDEO"].includes(mediaType)) {
-          return res
-            .status(400)
-            .json({ error: "media_type must be either IMAGE or VIDEO" });
-        }
+        // Add media to listing
+        const media = await catalogRepository.addListingMedia({
+          listing_id: req.params.id,
+          media_type: mediaType as never,
+          url: mediaUrl,
+          thumbnail_url: thumbnailUrl,
+          sort_order: body.sort_order ?? 0,
+          width: body.width,
+          height: body.height,
+          duration_seconds: body.duration_seconds,
+        });
 
-        // Validate URL format
-        try {
-          new URL(mediaUrl);
-        } catch {
-          return res.status(400).json({ error: "Invalid URL format" });
-        }
-
-        // Set thumbnail URL if provided
-        thumbnailUrl = body.thumbnail_url;
-      } else {
-        return res.status(400).json({
-          error:
-            "Either upload a file or provide a URL. Provide media_type in both cases.",
+        return res.status(201).json({
+          success: true,
+          message: "listing media created successfully",
+          data: media,
+        });
+      } catch (jwtError) {
+        return res.status(401).json({
+          error: "Invalid or expired token",
         });
       }
-
-      // Verify listing exists
-      const listing = await catalogRepository.getListingById(req.params.id);
-      if (!listing) {
-        return res.status(404).json({ error: "Listing not found" });
-      }
-
-      // Add media to listing
-      const media = await catalogRepository.addListingMedia({
-        listing_id: req.params.id,
-        media_type: mediaType as never,
-        url: mediaUrl,
-        thumbnail_url: thumbnailUrl,
-        sort_order: body.sort_order ?? 0,
-        width: body.width,
-        height: body.height,
-        duration_seconds: body.duration_seconds,
-      });
-
-      return res.status(201).json({
-        ...media,
-        _note:
-          "For file uploads in production, implement cloud storage integration",
-      });
     } catch (error) {
       return res
         .status(500)

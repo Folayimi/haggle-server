@@ -70,7 +70,7 @@ export class CatalogRepository extends BaseRepository {
     const category = await this.database
       .select()
       .from(categories)
-      .where(eq(categories.slug, slug));    
+      .where(eq(categories.slug, slug));
 
     if (category.length === 0) {
       return null;
@@ -153,6 +153,15 @@ export class CatalogRepository extends BaseRepository {
       .returning();
 
     return listing ?? null;
+  }
+
+  async deleteListingMedia(id: string) {
+    const deleted = await this.database
+      .delete(listingMedia)
+      .where(eq(listingMedia.id, id))
+      .returning();
+
+    return deleted.length > 0;
   }
 
   async deleteListing(listingId: string) {

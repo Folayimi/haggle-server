@@ -307,7 +307,7 @@ router.delete("/listings/:id", async (req: Request, res: Response) => {
 // Flexible media upload: supports both file uploads and URL-based media
 router.post(
   "/listings/:id/media",
-  upload.single("file"),
+  // upload.single("file"),
   async (req: Request, res: Response) => {
     if (!req.params.id) {
       return res.status(401).json({ error: "listing Id is required" });
@@ -420,7 +420,7 @@ router.post(
           duration_seconds: body.duration_seconds,
         });
 
-        return res.status(201).json({
+        return res.status(200).json({
           success: true,
           message: "listing media created successfully",
           data: media,
@@ -437,6 +437,49 @@ router.post(
     }
   },
 );
+
+router.delete("/listing-meida/:id/delete", async (req: Request, res: Response) => {
+  if (!req.params.id) {
+    return res.status(401).json({ error: "listing Id is required" });
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({
+      error: "No token provided",
+    });
+  }
+
+  const token = authHeader.split(" ")[1];
+  try {
+    try {
+      const decoded = verifyAccessToken(token);
+      // Get user data
+      const userData = await usersRepository.getUserById(decoded.userId);
+
+      if (!userData) {
+        return res.status(401).json({
+          error: "Invalid Token",
+        });
+      }
+
+      const removed = await catalogRepository.deleteListingMedia(req.params.id);
+      return res.status(201).json({
+        success: true,
+        message: "listing media Deleted successfully",
+        data: removed,
+      });
+    } catch (jwtError) {
+      return res.status(401).json({
+        error: "Invalid or expired token",
+      });
+    }
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: "Failed to delete listing media", details: error });
+  }
+});
 
 router.put("/listings/:id/inventory", async (req: Request, res: Response) => {
   try {

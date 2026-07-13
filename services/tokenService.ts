@@ -15,7 +15,7 @@ interface TokenPayload {
 
 interface Tokens {
   accessToken: string;
-  refreshToken: string;
+  refreshToken: string;  
 }
 
 interface ResetToken {
@@ -28,6 +28,7 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const RESET_TOKEN_EXPIRY = process.env.RESET_TOKEN_EXPIRY || "15m";
 const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "15m";
 const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY || "7d";
+const MEDIA_ACCESS_TOKEN_EXPIRY = process.env.MEDIA_ACCESS_TOKEN_EXPIRY || '8d'
 
 if (!JWT_ACCESS_SECRET || !JWT_REFRESH_SECRET) {
   throw new Error(
@@ -46,6 +47,15 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // Generate tokens
+export const generateMediaToken = (userId: string): string => {
+  // Changed: userId must be string, not undefined
+  const mediaAccessToken = jwt.sign({ userId, type: "access" }, JWT_ACCESS_SECRET, {
+    expiresIn: MEDIA_ACCESS_TOKEN_EXPIRY as jwt.SignOptions["expiresIn"],
+  });
+
+  return mediaAccessToken;
+};
+
 export const generateTokens = (userId: string): Tokens => {
   // Changed: userId must be string, not undefined
   const accessToken = jwt.sign({ userId, type: "access" }, JWT_ACCESS_SECRET, {

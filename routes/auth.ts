@@ -10,6 +10,7 @@ import {
   verifyUserRefreshToken,
   revokeUserSession,
   verifyResetToken,
+  generateMediaToken,
 } from "../services/tokenService";
 import { sendAppOtpEmail, sendWebVerificationEmail } from "../services/email";
 import {
@@ -180,6 +181,8 @@ router.post("/login", async (req: Request, res: Response) => {
     // Generate tokens
     const { accessToken, refreshToken } = generateTokens(user.user_id);
 
+    const mediaAccessToken = generateMediaToken(user.user_id);
+
     // Create session in database
     const session = await authRepository.createUserSession(
       user.user_id,
@@ -205,6 +208,7 @@ router.post("/login", async (req: Request, res: Response) => {
       tokens: {
         accessToken,
         refreshToken,
+        mediaAccessToken,
       },
       session: {
         id: session.id,
@@ -238,11 +242,13 @@ router.post("/refresh-token", async (req: Request, res: Response) => {
       body.refreshToken,
     );
 
-    console.log('TEsting...', userId)
+    console.log("TEsting...", userId);
 
     // Generate new tokens
     const { accessToken, refreshToken: newRefreshToken } =
       generateTokens(userId);
+
+    const mediaAccessToken = generateMediaToken(userId);
 
     // Revoke old session and create new one
     await authRepository.revokeUserSession(body.refreshToken);
@@ -253,6 +259,7 @@ router.post("/refresh-token", async (req: Request, res: Response) => {
       tokens: {
         accessToken,
         refreshToken: newRefreshToken,
+        mediaAccessToken,
       },
     });
   } catch (error) {
@@ -517,7 +524,7 @@ router.post("/verify-reset-otp", async (req: Request, res: Response) => {
 
   const { userId } = await verifyResetToken(token);
 
-  console.log("emmaillllllll")
+  console.log("emmaillllllll");
 
   const user = authRepository.findUserById(userId);
 
@@ -539,7 +546,7 @@ router.post("/verify-reset-otp", async (req: Request, res: Response) => {
       otpCode,
     );
 
-    console.log('verification:', verification)
+    console.log("verification:", verification);
 
     if (!verification || verification.expires_at <= new Date()) {
       return res.status(400).json({

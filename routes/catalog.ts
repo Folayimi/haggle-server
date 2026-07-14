@@ -438,48 +438,54 @@ router.post(
   },
 );
 
-router.delete("/listing-meida/:id/delete", async (req: Request, res: Response) => {
-  if (!req.params.id) {
-    return res.status(401).json({ error: "listing Id is required" });
-  }
+router.delete(
+  "/listings-media/:id/delete",
+  async (req: Request, res: Response) => {
+    console.log("okkkkkayyyyyyyy");
+    if (!req.params.id) {
+      return res.status(401).json({ error: "listing Id is required" });
+    }
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({
-      error: "No token provided",
-    });
-  }
-
-  const token = authHeader.split(" ")[1];
-  try {
-    try {
-      const decoded = verifyAccessToken(token);
-      // Get user data
-      const userData = await usersRepository.getUserById(decoded.userId);
-
-      if (!userData) {
-        return res.status(401).json({
-          error: "Invalid Token",
-        });
-      }
-
-      const removed = await catalogRepository.deleteListingMedia(req.params.id);
-      return res.status(201).json({
-        success: true,
-        message: "listing media Deleted successfully",
-        data: removed,
-      });
-    } catch (jwtError) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
-        error: "Invalid or expired token",
+        error: "No token provided",
       });
     }
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ error: "Failed to delete listing media", details: error });
-  }
-});
+
+    const token = authHeader.split(" ")[1];
+    try {
+      try {
+        const decoded = verifyAccessToken(token);
+        // Get user data
+        const userData = await usersRepository.getUserById(decoded.userId);
+
+        if (!userData) {
+          return res.status(401).json({
+            error: "Invalid Token",
+          });
+        }
+
+        const removed = await catalogRepository.deleteListingMedia(
+          req.params.id,
+        );
+        return res.status(201).json({
+          success: true,
+          message: "listing media Deleted successfully",
+          data: removed,
+        });
+      } catch (jwtError) {
+        return res.status(401).json({
+          error: "Invalid or expired token",
+        });
+      }
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ error: "Failed to delete listing media", details: error });
+    }
+  },
+);
 
 router.put("/listings/:id/inventory", async (req: Request, res: Response) => {
   try {
@@ -530,7 +536,7 @@ router.post("/listings/:id/save", async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/listings/:id/save", async (req: Request, res: Response) => {
+router.delete("/listings/:id/unsave", async (req: Request, res: Response) => {
   try {
     const userId = getRequestUserId(req);
     if (!userId) {

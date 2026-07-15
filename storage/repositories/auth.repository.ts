@@ -78,13 +78,12 @@ export class AuthRepository extends BaseRepository {
         status: input.status ?? UserStatus.ACTIVE,
       })
       .returning();
-
     const profileValues: InsertUserProfile = {
       user_id: user.id,
       full_name: input.full_name,
-      status:input.status,
-      primary_role:input.primary_role,
-      email:input.email,
+      status: input.status,
+      primary_role: input.primary_role,
+      email: input.email,
       username: input.username,
       response_time_label: input.response_time_label,
     };

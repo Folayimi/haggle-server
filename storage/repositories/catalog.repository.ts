@@ -151,7 +151,6 @@ export class CatalogRepository extends BaseRepository {
       })
       .where(eq(listings.id, listingId))
       .returning();
-
     return listing ?? null;
   }
 

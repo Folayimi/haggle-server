@@ -2,7 +2,12 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { authRepository, catalogRepository, usersRepository } from "../storage";
 import { getRequestUserId } from "./http";
-import { ListingStatus, ListingType, NegotiationStyle } from "../src/db/schema";
+import {
+  listingInventory,
+  ListingStatus,
+  ListingType,
+  NegotiationStyle,
+} from "../src/db/schema";
 import { verifyAccessToken } from "../services/tokenService";
 import { sanitizeNumericFields } from "../utils/sanitize";
 
@@ -267,10 +272,25 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
         });
       }
 
-      const listing = await catalogRepository.updateListing(
-        req.params.id,
-        req.body,
-      );
+      const sanitizedBody = sanitizeNumericFields(req.body);
+
+      const listing = await catalogRepository.updateListing(req.params.id, {
+        seller_id: sanitizedBody.seller_id,
+        listing_type: sanitizedBody.listing_type,
+        category_id: sanitizedBody.category_id,
+        title: sanitizedBody.title,
+        // Let the repository generate the slug if not provided, or pass it
+        slug: sanitizedBody.title.toLowerCase().replace(/\s+/g, "-") ?? "", // optional
+        description: sanitizedBody.description,
+        starting_amount: sanitizedBody.starting_amount, // now null if was empty
+        lowest_amount: sanitizedBody.lowest_amount, // now null if was empty
+        auto_decline_amount: sanitizedBody.auto_decline_amount, // now null if was empty
+        tags: sanitizedBody.tags,
+        status: sanitizedBody.status,
+        negotiation_style: sanitizedBody.negotiation_style,
+        negotiation_note: sanitizedBody.negotiation_note,
+        cover_media_id: sanitizedBody.cover_media_id,
+      });
 
       if (!listing) {
         return res.status(404).json({ error: "Listing not found" });
@@ -403,10 +423,10 @@ router.post(
         }
 
         // Verify listing exists
-        const listing = await catalogRepository.getListingById(req.params.id);
-        if (!listing) {
-          return res.status(404).json({ error: "Listing not found" });
-        }
+        // const listing = await catalogRepository.getListingById(req.params.id);
+        // if (!listing) {
+        //   return res.status(404).json({ error: "Listing not found" });
+        // }
 
         // Add media to listing
         const media = await catalogRepository.addListingMedia({

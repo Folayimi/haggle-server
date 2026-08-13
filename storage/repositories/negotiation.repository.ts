@@ -110,13 +110,16 @@ export class NegotiationRepository extends BaseRepository {
       })
       .where(eq(negotiationThreads.id, thread.id));
 
-    await this.database.insert(negotiationEvents).values({
-      thread_id: thread.id,
-      session_id: input.session_id ?? thread.session_id!,
-      actor_user_id: input.sender_user_id,
-      event_type: NegotiationEventType.OFFER_MADE,
-      payload_json: { offer_id: offer.id, amount: input.amount },
-    });
+    const eventSessionId = input.session_id ?? thread.session_id ?? undefined;
+    if (eventSessionId) {
+      await this.database.insert(negotiationEvents).values({
+        thread_id: thread.id,
+        session_id: eventSessionId,
+        actor_user_id: input.sender_user_id,
+        event_type: NegotiationEventType.OFFER_MADE,
+        payload_json: { offer_id: offer.id, amount: input.amount },
+      });
+    }
 
     return offer;
   }

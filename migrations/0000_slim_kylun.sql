@@ -25,6 +25,17 @@ CREATE TABLE "auth_otps" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "auth_sessions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" uuid NOT NULL,
+	"reset_token" text NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"revoked_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "auth_sessions_reset_token_unique" UNIQUE("reset_token")
+);
+--> statement-breakpoint
 CREATE TABLE "blocks" (
 	"blocker_user_id" uuid NOT NULL,
 	"blocked_user_id" uuid NOT NULL,
@@ -37,6 +48,7 @@ CREATE TABLE "categories" (
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
 	"kind" text DEFAULT 'both' NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "categories_slug_unique" UNIQUE("slug")
@@ -59,6 +71,18 @@ CREATE TABLE "conversations" (
 	"session_id" uuid,
 	"last_message_at" timestamp with time zone,
 	"last_message_preview" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "email_verifications" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" uuid NOT NULL,
+	"email" text NOT NULL,
+	"token" text,
+	"otp_code" text,
+	"type" text NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"verified_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -110,14 +134,19 @@ CREATE TABLE "listings" (
 	"title" text NOT NULL,
 	"slug" text NOT NULL,
 	"description" text NOT NULL,
-	"price_amount" numeric(12, 2) NOT NULL,
-	"price_currency" text DEFAULT 'USD' NOT NULL,
+	"starting_amount" numeric(12, 2),
+	"lowest_amount" numeric(12, 2),
+	"auto_decline_amount" numeric(12, 2),
+	"price_currency" text DEFAULT 'NGN' NOT NULL,
 	"status" text DEFAULT 'draft' NOT NULL,
-	"is_negotiable" boolean DEFAULT true NOT NULL,
-	"cover_media_id" uuid,
+	"thumbnail_url" text,
+	"medias" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"tags" text NOT NULL,
 	"view_count" integer DEFAULT 0 NOT NULL,
 	"save_count" integer DEFAULT 0 NOT NULL,
 	"share_count" integer DEFAULT 0 NOT NULL,
+	"negotiation_style" text DEFAULT 'negotiable' NOT NULL,
+	"negotiation_note" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -336,6 +365,18 @@ CREATE TABLE "reports" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "reset_email_verifications" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" uuid NOT NULL,
+	"email" text NOT NULL,
+	"token" text,
+	"otp_code" text,
+	"type" text NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"verified_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "reviews" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"order_id" uuid NOT NULL,
@@ -366,21 +407,6 @@ CREATE TABLE "seller_payouts" (
 	"currency" text DEFAULT 'USD' NOT NULL,
 	"status" text DEFAULT 'pending' NOT NULL,
 	"released_at" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "seller_profiles" (
-	"user_id" uuid PRIMARY KEY NOT NULL,
-	"business_name" text NOT NULL,
-	"trade_mark" text,
-	"cover_image_url" text,
-	"sells_summary" text,
-	"verification_status" text DEFAULT 'unverified' NOT NULL,
-	"rating_avg" numeric(3, 2),
-	"rating_count" integer DEFAULT 0 NOT NULL,
-	"follower_count" integer DEFAULT 0 NOT NULL,
-	"completed_sales_count" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -419,27 +445,38 @@ CREATE TABLE "user_profiles" (
 	"user_id" uuid PRIMARY KEY NOT NULL,
 	"full_name" text NOT NULL,
 	"username" text NOT NULL,
+	"email" text NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"primary_role" text DEFAULT 'buyer' NOT NULL,
 	"avatar_url" text,
 	"bio" text,
 	"country_code" text,
 	"city" text,
+	"business_name" text,
+	"trade_mark" text,
+	"cover_image_url" text,
+	"sells_summary" text,
+	"verification_status" text DEFAULT 'unverified' NOT NULL,
+	"rating_avg" numeric(3, 2),
+	"rating_count" integer DEFAULT 0 NOT NULL,
+	"follower_count" integer DEFAULT 0 NOT NULL,
+	"completed_sales_count" integer DEFAULT 0 NOT NULL,
 	"response_time_label" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "user_profiles_username_unique" UNIQUE("username")
+	CONSTRAINT "user_profiles_username_unique" UNIQUE("username"),
+	CONSTRAINT "user_profiles_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
 CREATE TABLE "user_sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
-	"refresh_token_hash" text NOT NULL,
-	"device_name" text,
-	"platform" text,
-	"ip_address" text,
-	"user_agent" text,
+	"refresh_token" text NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
 	"revoked_at" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "user_sessions_refresh_token_unique" UNIQUE("refresh_token")
 );
 --> statement-breakpoint
 CREATE TABLE "user_settings" (
@@ -448,7 +485,7 @@ CREATE TABLE "user_settings" (
 	"sms_enabled" boolean DEFAULT true NOT NULL,
 	"email_enabled" boolean DEFAULT true NOT NULL,
 	"show_online_status" boolean DEFAULT true NOT NULL,
-	"preferred_currency" text DEFAULT 'USD' NOT NULL,
+	"preferred_currency" text DEFAULT 'NGN' NOT NULL,
 	"preferred_role" text DEFAULT 'buyer' NOT NULL,
 	"seller_preferences" jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -488,17 +525,18 @@ CREATE TABLE "webrtc_peers" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-DROP TABLE "posts_table" CASCADE;--> statement-breakpoint
-DROP TABLE "users_table" CASCADE;--> statement-breakpoint
 ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_otps" ADD CONSTRAINT "auth_otps_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "auth_sessions" ADD CONSTRAINT "auth_sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "blocks" ADD CONSTRAINT "blocks_blocker_user_id_users_id_fk" FOREIGN KEY ("blocker_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "blocks" ADD CONSTRAINT "blocks_blocked_user_id_users_id_fk" FOREIGN KEY ("blocked_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "categories" ADD CONSTRAINT "categories_parent_id_categories_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."categories"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "conversation_participants" ADD CONSTRAINT "conversation_participants_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "conversation_participants" ADD CONSTRAINT "conversation_participants_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "conversations" ADD CONSTRAINT "conversations_seller_id_users_id_fk" FOREIGN KEY ("seller_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "conversations" ADD CONSTRAINT "conversations_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "conversations" ADD CONSTRAINT "conversations_session_id_live_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."live_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "email_verifications" ADD CONSTRAINT "email_verifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feed_impressions" ADD CONSTRAINT "feed_impressions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feed_impressions" ADD CONSTRAINT "feed_impressions_session_id_live_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."live_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feed_impressions" ADD CONSTRAINT "feed_impressions_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -535,6 +573,7 @@ ALTER TABLE "offers" ADD CONSTRAINT "offers_thread_id_negotiation_threads_id_fk"
 ALTER TABLE "offers" ADD CONSTRAINT "offers_session_id_live_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."live_sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "offers" ADD CONSTRAINT "offers_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "offers" ADD CONSTRAINT "offers_sender_user_id_users_id_fk" FOREIGN KEY ("sender_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "offers" ADD CONSTRAINT "offers_parent_offer_id_offers_id_fk" FOREIGN KEY ("parent_offer_id") REFERENCES "public"."offers"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_buyer_id_users_id_fk" FOREIGN KEY ("buyer_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -549,6 +588,7 @@ ALTER TABLE "reports" ADD CONSTRAINT "reports_reported_user_id_users_id_fk" FORE
 ALTER TABLE "reports" ADD CONSTRAINT "reports_session_id_live_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."live_sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reports" ADD CONSTRAINT "reports_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reports" ADD CONSTRAINT "reports_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "reset_email_verifications" ADD CONSTRAINT "reset_email_verifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reviews" ADD CONSTRAINT "reviews_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reviews" ADD CONSTRAINT "reviews_reviewer_user_id_users_id_fk" FOREIGN KEY ("reviewer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reviews" ADD CONSTRAINT "reviews_reviewed_user_id_users_id_fk" FOREIGN KEY ("reviewed_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -558,7 +598,6 @@ ALTER TABLE "seller_follows" ADD CONSTRAINT "seller_follows_seller_id_users_id_f
 ALTER TABLE "seller_follows" ADD CONSTRAINT "seller_follows_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "seller_payouts" ADD CONSTRAINT "seller_payouts_seller_id_users_id_fk" FOREIGN KEY ("seller_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "seller_payouts" ADD CONSTRAINT "seller_payouts_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "seller_profiles" ADD CONSTRAINT "seller_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shipments" ADD CONSTRAINT "shipments_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_addresses" ADD CONSTRAINT "user_addresses_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -571,10 +610,12 @@ ALTER TABLE "webrtc_peers" ADD CONSTRAINT "webrtc_peers_user_id_users_id_fk" FOR
 CREATE INDEX "auth_identities_user_id_idx" ON "auth_identities" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_uid_unique" ON "auth_identities" USING btree ("provider","provider_uid");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_email_unique" ON "auth_identities" USING btree ("email") WHERE "email" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "auth_identities_phone_unique" ON "auth_identities" USING btree ("phone_e164") WHERE "phone_e164" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "auth_otps_user_id_idx" ON "auth_otps" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "auth_otps_target_idx" ON "auth_otps" USING btree ("target");--> statement-breakpoint
 CREATE INDEX "auth_otps_expires_at_idx" ON "auth_otps" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "auth_sessions_user_id_idx" ON "auth_sessions" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "auth_sessions_reset_token_idx" ON "auth_sessions" USING btree ("reset_token");--> statement-breakpoint
+CREATE INDEX "auth_sessions_expires_at_idx" ON "auth_sessions" USING btree ("expires_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "blocks_blocker_user_id_blocked_user_id_unique" ON "blocks" USING btree ("blocker_user_id","blocked_user_id");--> statement-breakpoint
 CREATE INDEX "categories_parent_id_idx" ON "categories" USING btree ("parent_id");--> statement-breakpoint
 CREATE INDEX "categories_slug_idx" ON "categories" USING btree ("slug");--> statement-breakpoint
@@ -583,6 +624,11 @@ CREATE INDEX "conversation_participants_conversation_id_idx" ON "conversation_pa
 CREATE INDEX "conversation_participants_user_id_idx" ON "conversation_participants" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "conversations_last_message_at_desc_idx" ON "conversations" USING btree ("last_message_at");--> statement-breakpoint
 CREATE INDEX "conversations_session_id_idx" ON "conversations" USING btree ("session_id");--> statement-breakpoint
+CREATE INDEX "email_verifications_user_id_idx" ON "email_verifications" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "email_verifications_email_idx" ON "email_verifications" USING btree ("email");--> statement-breakpoint
+CREATE INDEX "email_verifications_token_idx" ON "email_verifications" USING btree ("token");--> statement-breakpoint
+CREATE INDEX "email_verifications_otp_code_idx" ON "email_verifications" USING btree ("otp_code");--> statement-breakpoint
+CREATE INDEX "email_verifications_expires_at_idx" ON "email_verifications" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "feed_impressions_user_id_created_at_idx" ON "feed_impressions" USING btree ("user_id","created_at");--> statement-breakpoint
 CREATE INDEX "feed_impressions_session_id_idx" ON "feed_impressions" USING btree ("session_id");--> statement-breakpoint
 CREATE INDEX "feed_impressions_listing_id_idx" ON "feed_impressions" USING btree ("listing_id");--> statement-breakpoint
@@ -626,6 +672,11 @@ CREATE INDEX "payments_provider_payment_id_idx" ON "payments" USING btree ("prov
 CREATE INDEX "reports_reporter_user_id_status_created_at_idx" ON "reports" USING btree ("reporter_user_id","status","created_at");--> statement-breakpoint
 CREATE INDEX "reports_reported_user_id_status_idx" ON "reports" USING btree ("reported_user_id","status");--> statement-breakpoint
 CREATE INDEX "reports_status_idx" ON "reports" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "reset_email_verifications_user_id_idx" ON "reset_email_verifications" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "reset_email_verifications_email_idx" ON "reset_email_verifications" USING btree ("email");--> statement-breakpoint
+CREATE INDEX "reset_email_verifications_token_idx" ON "reset_email_verifications" USING btree ("token");--> statement-breakpoint
+CREATE INDEX "reset_email_verifications_otp_code_idx" ON "reset_email_verifications" USING btree ("otp_code");--> statement-breakpoint
+CREATE INDEX "reset_email_verifications_expires_at_idx" ON "reset_email_verifications" USING btree ("expires_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "reviews_order_id_reviewer_user_id_reviewed_user_id_unique" ON "reviews" USING btree ("order_id","reviewer_user_id","reviewed_user_id");--> statement-breakpoint
 CREATE INDEX "reviews_reviewed_user_id_idx" ON "reviews" USING btree ("reviewed_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "saved_listings_user_id_listing_id_unique" ON "saved_listings" USING btree ("user_id","listing_id");--> statement-breakpoint
@@ -633,14 +684,14 @@ CREATE INDEX "saved_listings_user_id_idx" ON "saved_listings" USING btree ("user
 CREATE UNIQUE INDEX "seller_follows_seller_id_user_id_unique" ON "seller_follows" USING btree ("seller_id","user_id");--> statement-breakpoint
 CREATE INDEX "seller_follows_seller_id_idx" ON "seller_follows" USING btree ("seller_id");--> statement-breakpoint
 CREATE INDEX "seller_payouts_seller_id_status_created_at_idx" ON "seller_payouts" USING btree ("seller_id","status","created_at");--> statement-breakpoint
-CREATE INDEX "seller_profiles_verification_status_idx" ON "seller_profiles" USING btree ("verification_status");--> statement-breakpoint
 CREATE INDEX "shipments_order_id_idx" ON "shipments" USING btree ("order_id");--> statement-breakpoint
 CREATE INDEX "user_addresses_user_id_idx" ON "user_addresses" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "user_profiles_username_idx" ON "user_profiles" USING btree ("username");--> statement-breakpoint
 CREATE INDEX "user_profiles_country_code_idx" ON "user_profiles" USING btree ("country_code");--> statement-breakpoint
+CREATE INDEX "user_profiles_verification_status_idx" ON "user_profiles" USING btree ("verification_status");--> statement-breakpoint
 CREATE INDEX "user_sessions_user_id_idx" ON "user_sessions" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "user_sessions_refresh_token_idx" ON "user_sessions" USING btree ("refresh_token");--> statement-breakpoint
 CREATE INDEX "user_sessions_expires_at_idx" ON "user_sessions" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "user_sessions_revoked_at_idx" ON "user_sessions" USING btree ("revoked_at");--> statement-breakpoint
 CREATE INDEX "users_status_idx" ON "users" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "users_role_idx" ON "users" USING btree ("primary_role");--> statement-breakpoint
 CREATE INDEX "verification_submissions_user_id_verification_type_idx" ON "verification_submissions" USING btree ("user_id","verification_type");--> statement-breakpoint

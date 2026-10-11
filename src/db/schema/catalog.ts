@@ -117,7 +117,9 @@ export const listings = pgTable(
       .default(ListingStatus.DRAFT),
 
     // Media
-    cover_media_id: uuid("cover_media_id"),
+    thumbnail_url: text("thumbnail_url"), // For feed display
+
+    medias: jsonb("medias").notNull().default([]), // Array of media objects (images/videos) for the listing
 
     tags: text("tags").notNull(), // Pipe Character-separated tags
 

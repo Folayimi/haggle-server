@@ -21,10 +21,38 @@ const upload = multer({
   },
 });
 
-router.get("/categories", async (_req: Request, res: Response) => {
+router.get("/categories", async (req: Request, res: Response) => {
   try {
-    const categories = await catalogRepository.listCategories();
-    return res.json(categories);
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "No token provided",
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
+    try {
+      const decoded = verifyAccessToken(token);
+      // Get user data
+      const userData = await usersRepository.getUserById(decoded.userId);
+
+      if (!userData) {
+        return res.status(401).json({
+          error: "Invalid Token",
+        });
+      }
+
+      const categories = await catalogRepository.listCategories();
+      return res.json({
+        success: true,
+        message: "category found",
+        data: categories,
+      });
+    } catch (jwtError) {
+      return res.status(401).json({
+        error: "Invalid or expired token",
+      });
+    }
   } catch (error) {
     return res
       .status(500)
@@ -135,12 +163,88 @@ router.post("/categories", async (req: Request, res: Response) => {
   }
 });
 
+router.get(
+  "/listings/seller/:sellerId",
+  async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({
+          error: "No token provided",
+        });
+      }
+
+      const token = authHeader.split(" ")[1];
+      try {
+        const decoded = verifyAccessToken(token);
+        // Get user data
+        const userData = await usersRepository.getUserById(decoded.userId);
+
+        if (!userData) {
+          return res.status(401).json({
+            error: "Invalid Token",
+          });
+        }
+
+        if (!req.params.sellerId) {
+          return res.status(401).json({ error: "seller Id is required" });
+        }
+        const sellerId =
+          typeof req.params.sellerId === "string"
+            ? req.params.sellerId
+            : undefined;
+        const listings = await catalogRepository.listListings(sellerId);
+        return res.json({
+          success: true,
+          message: "seller listings found",
+          data: listings,
+        });
+      } catch (jwtError) {
+        return res.status(401).json({
+          error: "Invalid or expired token",
+        });
+      }
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ error: "Failed to fetch seller listings", details: error });
+    }
+  },
+);
+
 router.get("/listings", async (req: Request, res: Response) => {
   try {
-    const sellerId =
-      typeof req.query.sellerId === "string" ? req.query.sellerId : undefined;
-    const listings = await catalogRepository.listListings(sellerId);
-    return res.json(listings);
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "No token provided",
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
+    try {
+      const decoded = verifyAccessToken(token);
+      // Get user data
+      const userData = await usersRepository.getUserById(decoded.userId);
+
+      if (!userData) {
+        return res.status(401).json({
+          error: "Invalid Token",
+        });
+      }
+
+      const listings = await catalogRepository.listListings();
+
+      return res.json({
+        success: true,
+        message: "listings found",
+        data: listings,
+      });
+    } catch (jwtError) {
+      return res.status(401).json({
+        error: "Invalid or expired token",
+      });
+    }
   } catch (error) {
     return res
       .status(500)
@@ -173,6 +277,7 @@ router.post("/listings", async (req: Request, res: Response) => {
       seller_id?: string;
       listing_type?: (typeof ListingType)[keyof typeof ListingType];
       category_id?: string;
+      category?: string;
       title?: string;
       description?: string;
       starting_amount?: string;
@@ -182,7 +287,8 @@ router.post("/listings", async (req: Request, res: Response) => {
       status?: (typeof ListingStatus)[keyof typeof ListingStatus];
       negotiation_style?: (typeof NegotiationStyle)[keyof typeof NegotiationStyle];
       negotiation_note?: string;
-      cover_media_id?: string;
+      thumbnail_url?: string;
+      medias?: any[];
     };
 
     // 1. Sanitize numeric fields
@@ -200,6 +306,14 @@ router.post("/listings", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Missing required listing fields" });
     }
 
+    // let listingMedias: any[] = [];
+
+    // while (listingMedias.length === 0) {
+    const listingMedias = await catalogRepository.getListingMedia(req.params.id);
+    // }
+
+    console.log("Listing Medias:", listingMedias); // Debugging line to check the retrieved media
+
     const listing = await catalogRepository.createListing({
       seller_id: sanitizedBody.seller_id,
       listing_type: sanitizedBody.listing_type,
@@ -215,7 +329,8 @@ router.post("/listings", async (req: Request, res: Response) => {
       status: sanitizedBody.status,
       negotiation_style: sanitizedBody.negotiation_style,
       negotiation_note: sanitizedBody.negotiation_note,
-      cover_media_id: sanitizedBody.cover_media_id,
+      thumbnail_url: listingMedias.length > 0 ? listingMedias[0].url : "", // Use the first media as thumbnail if available
+      medias: listingMedias.length > 0 ? listingMedias : [], // Use the retrieved listing media
     });
 
     return res.status(201).json({
@@ -232,12 +347,46 @@ router.post("/listings", async (req: Request, res: Response) => {
 
 router.get("/listings/:id", async (req: Request, res: Response) => {
   try {
-    const listing = await catalogRepository.getListingById(req.params.id);
-    if (!listing) {
-      return res.status(404).json({ error: "Listing not found" });
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "No token provided",
+      });
     }
 
-    return res.json(listing);
+    const token = authHeader.split(" ")[1];
+
+    // Verify access token
+    try {
+      const decoded = verifyAccessToken(token);
+      // Get user data
+      const userData = await usersRepository.getUserById(decoded.userId);
+
+      if (!userData) {
+        return res.status(401).json({
+          error: "Invalid Token",
+        });
+      }
+
+      if (!req.params.id) {
+        return res.status(401).json({ error: "listing Id is required" });
+      }
+
+      const listing = await catalogRepository.getListingById(req.params.id);
+      if (!listing) {
+        return res.status(404).json({ error: "Listing not found" });
+      }
+
+      return res.json({
+        success: true,
+        message: "listing found",
+        data: listing,
+      });
+    } catch (jwtError) {
+      return res.status(401).json({
+        error: "Invalid or expired token",
+      });
+    }
   } catch (error) {
     return res
       .status(500)
@@ -274,6 +423,14 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
 
       const sanitizedBody = sanitizeNumericFields(req.body);
 
+      // let listingMedias: any[] = [];
+
+      // while (listingMedias.length === 0) {
+      const listingMedias = await catalogRepository.getListingMedia(req.params.id);
+      // }
+
+      console.log("Listing Medias:", listingMedias); // Debugging line to check the retrieved media
+
       const listing = await catalogRepository.updateListing(req.params.id, {
         seller_id: sanitizedBody.seller_id,
         listing_type: sanitizedBody.listing_type,
@@ -288,8 +445,8 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
         tags: sanitizedBody.tags,
         status: sanitizedBody.status,
         negotiation_style: sanitizedBody.negotiation_style,
-        negotiation_note: sanitizedBody.negotiation_note,
-        cover_media_id: sanitizedBody.cover_media_id,
+        thumbnail_url: listingMedias.length > 0 ? listingMedias[0].url : "", // Use the first media as thumbnail if available
+        medias: listingMedias.length > 0 ? listingMedias : [], // Use the retrieved listing media
       });
 
       if (!listing) {
@@ -344,8 +501,12 @@ router.post(
     try {
       try {
         const decoded = verifyAccessToken(token);
+
+        console.log("Decoded Token:", decoded); // Debugging line to check the decoded token
         // Get user data
         const userData = await usersRepository.getUserById(decoded.userId);
+
+        console.log('User Data:', userData); // Debugging line to check the retrieved user data
 
         if (!userData) {
           return res.status(401).json({

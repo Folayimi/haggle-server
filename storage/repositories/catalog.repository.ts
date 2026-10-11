@@ -46,7 +46,8 @@ export interface CreateListingInput {
   status?: (typeof ListingStatus)[keyof typeof ListingStatus];
   negotiation_style?: (typeof NegotiationStyle)[keyof typeof NegotiationStyle];
   negotiation_note?: string;
-  cover_media_id?: string;
+  thumbnail_url?: string;
+  medias?: any[];
 }
 
 export class CatalogRepository extends BaseRepository {
@@ -178,6 +179,14 @@ export class CatalogRepository extends BaseRepository {
       .values(input)
       .returning();
     return media;
+  }
+
+  async getListingMedia(listingId: string) {
+    return this.database
+      .select()
+      .from(listingMedia)
+      .where(eq(listingMedia.listing_id, listingId))
+      .orderBy(listingMedia.sort_order);
   }
 
   async setListingInventory(

@@ -14,6 +14,8 @@ import {
   ListingStatus,
   ListingType,
   NegotiationStyle,
+  TargetAudience,
+  WorkPlace,
 } from "../../src/db/schema";
 
 const slugify = (value: string) =>
@@ -38,6 +40,10 @@ export interface CreateListingInput {
   title: string;
   slug?: string;
   description: string;
+  target_audience?: (typeof TargetAudience)[keyof typeof TargetAudience];
+  delivery_duration?: string;
+  work_place?: (typeof WorkPlace)[keyof typeof WorkPlace];
+  work_address?: string;
   starting_amount?: string;
   lowest_amount?: string;
   auto_decline_amount?: string;
@@ -133,6 +139,8 @@ export class CatalogRepository extends BaseRepository {
       .values({
         ...input,
         slug: input.slug ?? slugify(input.title),
+        work_address: input.work_address ?? "",
+        delivery_duration: input.delivery_duration ?? "",
       })
       .returning();
 

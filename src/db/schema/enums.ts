@@ -50,6 +50,21 @@ export const EmailVerificationType = {
   APP_OTP: "app_otp",
 } as const;
 
+export const TargetAudience = {
+  GENERAL: "general",
+  BUSINESSES: "busineses",
+  INDIVIDUALS: "individuals",
+  CREATORS: "creators",
+  STUDENTS: "students",
+  STARTUPS: "startups",
+  PROFESSIONALS: "professionals",  
+} as const;
+
+export const WorkPlace = {
+  REMOTE: "remote",
+  ON_SITE:"on_site"
+}
+
 // Listing and catalog
 export const ListingType = {
   PRODUCT: "product",

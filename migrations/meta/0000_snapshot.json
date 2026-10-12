@@ -1,5 +1,5 @@
 {
-  "id": "f956b8f6-74f4-4a57-b205-440ffc523807",
+  "id": "847f4cd4-65f4-4aec-b523-599478d859f8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1468,6 +1468,32 @@
         },
         "description": {
           "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_audience": {
+          "name": "target_audience",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'general'"
+        },
+        "work_place": {
+          "name": "work_place",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'remote'"
+        },
+        "work_address": {
+          "name": "work_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delivery_duration": {
+          "name": "delivery_duration",
           "type": "text",
           "primaryKey": false,
           "notNull": true

@@ -7,6 +7,8 @@ import {
   ListingStatus,
   ListingType,
   NegotiationStyle,
+  TargetAudience,
+  WorkPlace,
 } from "../src/db/schema";
 import { verifyAccessToken } from "../services/tokenService";
 import { sanitizeNumericFields } from "../utils/sanitize";
@@ -280,6 +282,10 @@ router.post("/listings", async (req: Request, res: Response) => {
       category?: string;
       title?: string;
       description?: string;
+      target_audience?: (typeof TargetAudience)[keyof typeof TargetAudience];
+      delivery_duration?: string;
+      work_place?: (typeof WorkPlace)[keyof typeof WorkPlace];
+      work_address?: string;
       starting_amount?: string;
       lowest_amount?: string;
       auto_decline_amount?: string;
@@ -309,7 +315,9 @@ router.post("/listings", async (req: Request, res: Response) => {
     // let listingMedias: any[] = [];
 
     // while (listingMedias.length === 0) {
-    const listingMedias = await catalogRepository.getListingMedia(req.params.id);
+    const listingMedias = await catalogRepository.getListingMedia(
+      req.params.id,
+    );
     // }
 
     console.log("Listing Medias:", listingMedias); // Debugging line to check the retrieved media
@@ -322,6 +330,10 @@ router.post("/listings", async (req: Request, res: Response) => {
       // Let the repository generate the slug if not provided, or pass it
       slug: sanitizedBody.title.toLowerCase().replace(/\s+/g, "-") ?? "", // optional
       description: sanitizedBody.description,
+      target_audience: sanitizedBody.target_audience,
+      delivery_duration: sanitizedBody.delivery_duration ?? "",
+      work_place: sanitizedBody.work_place ?? "",
+      work_address: sanitizedBody.work_address ?? "",
       starting_amount: sanitizedBody.starting_amount, // now null if was empty
       lowest_amount: sanitizedBody.lowest_amount, // now null if was empty
       auto_decline_amount: sanitizedBody.auto_decline_amount, // now null if was empty
@@ -426,7 +438,9 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
       // let listingMedias: any[] = [];
 
       // while (listingMedias.length === 0) {
-      const listingMedias = await catalogRepository.getListingMedia(req.params.id);
+      const listingMedias = await catalogRepository.getListingMedia(
+        req.params.id,
+      );
       // }
 
       console.log("Listing Medias:", listingMedias); // Debugging line to check the retrieved media
@@ -439,6 +453,10 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
         // Let the repository generate the slug if not provided, or pass it
         slug: sanitizedBody.title.toLowerCase().replace(/\s+/g, "-") ?? "", // optional
         description: sanitizedBody.description,
+        target_audience: sanitizedBody.target_audience,
+        delivery_duration: sanitizedBody.delivery_duration ?? "",
+        work_place: sanitizedBody.work_place ?? "",
+        work_address: sanitizedBody.work_address ?? "",
         starting_amount: sanitizedBody.starting_amount, // now null if was empty
         lowest_amount: sanitizedBody.lowest_amount, // now null if was empty
         auto_decline_amount: sanitizedBody.auto_decline_amount, // now null if was empty
@@ -506,7 +524,7 @@ router.post(
         // Get user data
         const userData = await usersRepository.getUserById(decoded.userId);
 
-        console.log('User Data:', userData); // Debugging line to check the retrieved user data
+        console.log("User Data:", userData); // Debugging line to check the retrieved user data
 
         if (!userData) {
           return res.status(401).json({

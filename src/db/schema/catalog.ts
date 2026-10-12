@@ -29,6 +29,8 @@ import {
   MediaType,
   NegotiationStyle,
   ServiceDeliveryMode,
+  TargetAudience,
+  WorkPlace,
 } from "./enums";
 
 /**
@@ -90,6 +92,28 @@ export const listings = pgTable(
     title: text("title").notNull(),
     slug: text("slug").notNull(),
     description: text("description").notNull(),
+    target_audience: text("target_audience", {
+      enum: [
+        TargetAudience.GENERAL,
+        TargetAudience.CREATORS,
+        TargetAudience.BUSINESSES,
+        TargetAudience.INDIVIDUALS,
+        TargetAudience.PROFESSIONALS,
+        TargetAudience.STARTUPS,
+        TargetAudience.STUDENTS,
+      ],
+    })
+      .notNull()
+      .default(TargetAudience.GENERAL),
+    work_place: text("work_place", {
+      enum: [WorkPlace.REMOTE, WorkPlace.ON_SITE],
+    })
+      .notNull()
+      .default(WorkPlace.REMOTE),
+
+    work_address: text("work_address").notNull(),
+
+    delivery_duration: text("delivery_duration").notNull(),
     // Pricing
     starting_amount: decimal("starting_amount", {
       precision: 12,

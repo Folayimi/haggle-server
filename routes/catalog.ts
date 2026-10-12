@@ -214,7 +214,9 @@ router.get(
   },
 );
 
-router.get("/listings", async (req: Request, res: Response) => {
+const getListings = (
+  listingType?: (typeof ListingType)[keyof typeof ListingType],
+) => async (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -235,7 +237,10 @@ router.get("/listings", async (req: Request, res: Response) => {
         });
       }
 
-      const listings = await catalogRepository.listListings();
+      const listings = await catalogRepository.listListings(
+        undefined,
+        listingType,
+      );
 
       return res.json({
         success: true,
@@ -252,7 +257,11 @@ router.get("/listings", async (req: Request, res: Response) => {
       .status(500)
       .json({ error: "Failed to fetch listings", details: error });
   }
-});
+};
+
+router.get("/listings/product", getListings(ListingType.PRODUCT));
+router.get("/listings/services", getListings(ListingType.SERVICE));
+router.get("/listings", getListings());
 
 router.post("/listings", async (req: Request, res: Response) => {
   try {
@@ -293,6 +302,7 @@ router.post("/listings", async (req: Request, res: Response) => {
       status?: (typeof ListingStatus)[keyof typeof ListingStatus];
       negotiation_style?: (typeof NegotiationStyle)[keyof typeof NegotiationStyle];
       negotiation_note?: string;
+      inventory_count?: number;
       thumbnail_url?: string;
       medias?: any[];
     };
@@ -341,6 +351,7 @@ router.post("/listings", async (req: Request, res: Response) => {
       status: sanitizedBody.status,
       negotiation_style: sanitizedBody.negotiation_style,
       negotiation_note: sanitizedBody.negotiation_note,
+      inventory_count: sanitizedBody.inventory_count ?? 0,
       thumbnail_url: listingMedias.length > 0 ? listingMedias[0].url : "", // Use the first media as thumbnail if available
       medias: listingMedias.length > 0 ? listingMedias : [], // Use the retrieved listing media
     });
@@ -463,6 +474,7 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
         tags: sanitizedBody.tags,
         status: sanitizedBody.status,
         negotiation_style: sanitizedBody.negotiation_style,
+        inventory_count: sanitizedBody.inventory_count ?? 0,
         thumbnail_url: listingMedias.length > 0 ? listingMedias[0].url : "", // Use the first media as thumbnail if available
         medias: listingMedias.length > 0 ? listingMedias : [], // Use the retrieved listing media
       });

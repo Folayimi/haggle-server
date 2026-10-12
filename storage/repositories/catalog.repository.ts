@@ -44,6 +44,7 @@ export interface CreateListingInput {
   delivery_duration?: string;
   work_place?: (typeof WorkPlace)[keyof typeof WorkPlace];
   work_address?: string;
+  inventory_count:number;
   starting_amount?: string;
   lowest_amount?: string;
   auto_decline_amount?: string;
@@ -88,12 +89,36 @@ export class CatalogRepository extends BaseRepository {
     };
   }
 
-  async listListings(sellerId?: string) {
+  async listListings(
+    sellerId?: string,
+    listingType?: (typeof ListingType)[keyof typeof ListingType],
+  ) {
+    if (sellerId && listingType) {
+      return this.database
+        .select()
+        .from(listings)
+        .where(
+          and(
+            eq(listings.seller_id, sellerId),
+            eq(listings.listing_type, listingType),
+          ),
+        )
+        .orderBy(desc(listings.created_at));
+    }
+
     if (sellerId) {
       return this.database
         .select()
         .from(listings)
         .where(eq(listings.seller_id, sellerId))
+        .orderBy(desc(listings.created_at));
+    }
+
+    if (listingType) {
+      return this.database
+        .select()
+        .from(listings)
+        .where(eq(listings.listing_type, listingType))
         .orderBy(desc(listings.created_at));
     }
 

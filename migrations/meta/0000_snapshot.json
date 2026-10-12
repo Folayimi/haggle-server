@@ -1,5 +1,5 @@
 {
-  "id": "847f4cd4-65f4-4aec-b523-599478d859f8",
+  "id": "66fc8174-189f-4a8d-98cb-47f4caefc879",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1548,6 +1548,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "inventory_count": {
+          "name": "inventory_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "view_count": {
           "name": "view_count",

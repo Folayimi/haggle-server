@@ -146,6 +146,7 @@ CREATE TABLE "listings" (
 	"thumbnail_url" text,
 	"medias" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"tags" text NOT NULL,
+	"inventory_count" integer DEFAULT 0 NOT NULL,
 	"view_count" integer DEFAULT 0 NOT NULL,
 	"save_count" integer DEFAULT 0 NOT NULL,
 	"share_count" integer DEFAULT 0 NOT NULL,

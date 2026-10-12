@@ -148,6 +148,7 @@ export const listings = pgTable(
     tags: text("tags").notNull(), // Pipe Character-separated tags
 
     // Denormalized metrics for feed optimization
+    inventory_count: integer("inventory_count").notNull().default(0),
     view_count: integer("view_count").notNull().default(0),
     save_count: integer("save_count").notNull().default(0),
     share_count: integer("share_count").notNull().default(0),

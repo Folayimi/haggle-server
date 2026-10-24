@@ -197,6 +197,15 @@ export class CatalogRepository extends BaseRepository {
     return deleted.length > 0;
   }
 
+  async getListingMediaById(id: string) {
+    const [media] = await this.database
+      .select()
+      .from(listingMedia)
+      .where(eq(listingMedia.id, id))
+      .limit(1);
+    return media ?? null;
+  }
+
   async deleteListing(listingId: string) {
     const deleted = await this.database
       .delete(listings)

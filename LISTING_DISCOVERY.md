@@ -13,6 +13,7 @@ All responses use the existing `{ success, message, data }` style where applicab
 | `GET /api/v1/catalog/listings/recommendations` | Bearer access token | Category, listing type, and followed seller signals from the current user's recent activity; trending fallback. |
 | `POST /api/v1/catalog/listings/:id/interactions` | Bearer access token | Records `tap`, `watch`, `share`, `contact_seller`, or `negotiation_started`. Requires a UUID `event_id`; watch also accepts `watch_ms` (0–3,600,000). |
 | `GET /api/v1/catalog/listings/:id/views` | Public | Returns the published listing's lifetime `view_count`. |
+| `PATCH /api/v1/catalog/listings/:id/archive` | Listing owner bearer token | Sets the listing status to `archived`; repeated requests are safe. |
 | `GET /api/v1/catalog/listings/:id/analytics?days=7` | Listing owner bearer token | Detailed counts for a 1–90 day window. Viewer identities are never returned. |
 | `POST /api/v1/catalog/listings/:id/reviews` | Bearer access token | Create one review per user and listing. Body: `rating` 1–5, optional `title` (120 chars), optional `comment` (4,000 chars). |
 | `GET /api/v1/catalog/listings/:id/reviews?page=1&limit=20` | Public | Published reviews with only public reviewer name and avatar. |
@@ -46,6 +47,8 @@ Example review response:
 ## Interaction and ranking semantics
 
 The existing `feed_impressions` table stores listing events. Opening a published listing through its existing authenticated detail endpoint records a view. The authenticated viewer is read from the signed bearer token; owner views are ignored. A unique key allows one count per user/listing in each 30-minute bucket, and `view_count` is incremented atomically only when the insert succeeds. Anonymous views are not supported because current detail routes require authentication.
+
+The catalog router also requires a valid bearer access token on its existing category and listing routes. Listing edits, archive, delete, media changes, inventory changes, and service metadata changes are restricted to the listing owner. `DELETE /api/v1/catalog/listings/:id` remains a hard delete; use the archive endpoint when retaining the listing is preferred.
 
 Saves and unsaves are recorded by the existing save routes and update `save_count` only when the saved-listing row changes. Other supported events require a client UUID `event_id` for idempotent retries. Seller generated activity is excluded from trending. The seven-day score counts each user once per signal: view 1, tap 2, meaningful watch (at least five seconds) 3, save 4, share 5, contact 6, negotiation started 8. The total is multiplied by a recency factor that declines linearly over 14 days, with a 0.1 floor. Stable creation time and ID tie-breakers are used.
 

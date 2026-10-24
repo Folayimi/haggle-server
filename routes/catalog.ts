@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { authRepository, catalogRepository, listingFeaturesRepository, usersRepository } from "../storage";
-import { getBearerUserId } from "./http";
+import { getBearerUserId, isUuid } from "./http";
 import {
   listingInventory,
   ListingStatus,
@@ -14,6 +14,28 @@ import { verifyAccessToken } from "../services/tokenService";
 import { sanitizeNumericFields } from "../utils/sanitize";
 
 const router = Router();
+
+// Every route in this legacy catalog router requires a valid access token.
+// Public listing discovery/review reads are registered in listing-discovery.ts.
+router.use(async (req: Request, res: Response, next) => {
+  const userId = getBearerUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: "A valid bearer token is required" });
+  }
+
+  try {
+    const user = await authRepository.findUserById(userId);
+    if (!user) return res.status(401).json({ error: "Invalid token user" });
+    return next();
+  } catch (error) {
+    return res.status(500).json({ error: "Failed to authenticate request", details: error });
+  }
+});
+
+const findOwnedListing = async (listingId: string, userId: string) => {
+  const listing = await catalogRepository.getListingById(listingId);
+  return listing?.seller_id === userId ? listing : null;
+};
 
 // Configure multer for file uploads (in-memory storage)
 const upload = multer({
@@ -307,12 +329,15 @@ router.post("/listings", async (req: Request, res: Response) => {
       medias?: any[];
     };
 
+    if (body.seller_id && body.seller_id !== decoded.userId) {
+      return res.status(403).json({ error: "Listings can only be created for the authenticated seller" });
+    }
+
     // 1. Sanitize numeric fields
     const sanitizedBody = sanitizeNumericFields(body);
 
     // 2. Validate required fields (using sanitizedBody)
     if (
-      !sanitizedBody.seller_id ||
       !sanitizedBody.listing_type ||
       !sanitizedBody.category_id ||
       !sanitizedBody.title ||
@@ -322,18 +347,10 @@ router.post("/listings", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Missing required listing fields" });
     }
 
-    // let listingMedias: any[] = [];
-
-    // while (listingMedias.length === 0) {
-    const listingMedias = await catalogRepository.getListingMedia(
-      req.params.id,
-    );
-    // }
-
-    console.log("Listing Medias:", listingMedias); // Debugging line to check the retrieved media
+    const listingMedias = Array.isArray(sanitizedBody.medias) ? sanitizedBody.medias : [];
 
     const listing = await catalogRepository.createListing({
-      seller_id: sanitizedBody.seller_id,
+      seller_id: decoded.userId,
       listing_type: sanitizedBody.listing_type,
       category_id: sanitizedBody.category_id,
       title: sanitizedBody.title,
@@ -352,8 +369,8 @@ router.post("/listings", async (req: Request, res: Response) => {
       negotiation_style: sanitizedBody.negotiation_style,
       negotiation_note: sanitizedBody.negotiation_note,
       inventory_count: sanitizedBody.inventory_count ?? 0,
-      thumbnail_url: listingMedias.length > 0 ? listingMedias[0].url : "", // Use the first media as thumbnail if available
-      medias: listingMedias.length > 0 ? listingMedias : [], // Use the retrieved listing media
+      thumbnail_url: sanitizedBody.thumbnail_url ?? listingMedias[0]?.url ?? "",
+      medias: listingMedias,
     });
 
     return res.status(201).json({
@@ -450,39 +467,39 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
         });
       }
 
+      if (!isUuid(req.params.id)) {
+        return res.status(400).json({ error: "Invalid listing ID" });
+      }
+      const ownedListing = await findOwnedListing(req.params.id, decoded.userId);
+      if (!ownedListing) {
+        return res.status(404).json({ error: "Listing not found" });
+      }
+
       const sanitizedBody = sanitizeNumericFields(req.body);
 
-      // let listingMedias: any[] = [];
-
-      // while (listingMedias.length === 0) {
-      const listingMedias = await catalogRepository.getListingMedia(
-        req.params.id,
-      );
-      // }
-
-      console.log("Listing Medias:", listingMedias); // Debugging line to check the retrieved media
+      const listingMedias = ownedListing.media;
 
       const listing = await catalogRepository.updateListing(req.params.id, {
-        seller_id: sanitizedBody.seller_id,
+        seller_id: decoded.userId,
         listing_type: sanitizedBody.listing_type,
         category_id: sanitizedBody.category_id,
         title: sanitizedBody.title,
         // Let the repository generate the slug if not provided, or pass it
-        slug: sanitizedBody.title.toLowerCase().replace(/\s+/g, "-") ?? "", // optional
+        slug: sanitizedBody.title ? sanitizedBody.title.toLowerCase().replace(/\s+/g, "-") : undefined,
         description: sanitizedBody.description,
         target_audience: sanitizedBody.target_audience,
-        delivery_duration: sanitizedBody.delivery_duration ?? "",
-        work_place: sanitizedBody.work_place ?? "",
-        work_address: sanitizedBody.work_address ?? "",
+        delivery_duration: sanitizedBody.delivery_duration,
+        work_place: sanitizedBody.work_place,
+        work_address: sanitizedBody.work_address,
         starting_amount: sanitizedBody.starting_amount, // now null if was empty
         lowest_amount: sanitizedBody.lowest_amount, // now null if was empty
         auto_decline_amount: sanitizedBody.auto_decline_amount, // now null if was empty
         tags: sanitizedBody.tags,
         status: sanitizedBody.status,
         negotiation_style: sanitizedBody.negotiation_style,
-        inventory_count: sanitizedBody.inventory_count ?? 0,
-        thumbnail_url: listingMedias.length > 0 ? listingMedias[0].url : "", // Use the first media as thumbnail if available
-        medias: listingMedias.length > 0 ? listingMedias : [], // Use the retrieved listing media
+        inventory_count: sanitizedBody.inventory_count,
+        thumbnail_url: listingMedias.length > 0 ? listingMedias[0].url : ownedListing.thumbnail_url,
+        medias: listingMedias,
       });
 
       if (!listing) {
@@ -506,14 +523,34 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/listings/:id", async (req: Request, res: Response) => {
+router.patch("/listings/:id/archive", async (req: Request, res: Response) => {
+  const userId = getBearerUserId(req);
+  if (!userId) return res.status(401).json({ error: "A valid bearer token is required" });
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
   try {
-    const deleted = await catalogRepository.deleteListing(req.params.id);
-    return res.json({ deleted });
+    const listing = await findOwnedListing(req.params.id, userId);
+    if (!listing) return res.status(404).json({ error: "Listing not found" });
+    if (listing.status === ListingStatus.ARCHIVED) {
+      return res.json({ success: true, message: "Listing is already archived", data: listing });
+    }
+    const archived = await catalogRepository.updateListing(req.params.id, { status: ListingStatus.ARCHIVED });
+    return res.json({ success: true, message: "Listing archived successfully", data: archived });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ error: "Failed to delete listing", details: error });
+    return res.status(500).json({ error: "Failed to archive listing", details: error });
+  }
+});
+
+router.delete("/listings/:id", async (req: Request, res: Response) => {
+  const userId = getBearerUserId(req);
+  if (!userId) return res.status(401).json({ error: "A valid bearer token is required" });
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
+  try {
+    const listing = await findOwnedListing(req.params.id, userId);
+    if (!listing) return res.status(404).json({ error: "Listing not found" });
+    const deleted = await catalogRepository.deleteListing(req.params.id);
+    return res.json({ success: true, deleted });
+  } catch (error) {
+    return res.status(500).json({ error: "Failed to delete listing", details: error });
   }
 });
 
@@ -538,16 +575,18 @@ router.post(
       try {
         const decoded = verifyAccessToken(token);
 
-        console.log("Decoded Token:", decoded); // Debugging line to check the decoded token
         // Get user data
         const userData = await usersRepository.getUserById(decoded.userId);
-
-        console.log("User Data:", userData); // Debugging line to check the retrieved user data
 
         if (!userData) {
           return res.status(401).json({
             error: "Invalid Token",
           });
+        }
+
+        if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
+        if (!(await findOwnedListing(req.params.id, decoded.userId))) {
+          return res.status(404).json({ error: "Listing not found" });
         }
 
         let mediaUrl: string | undefined;
@@ -658,7 +697,6 @@ router.post(
 router.delete(
   "/listings-media/:id/delete",
   async (req: Request, res: Response) => {
-    console.log("okkkkkayyyyyyyy");
     if (!req.params.id) {
       return res.status(401).json({ error: "listing Id is required" });
     }
@@ -681,6 +719,12 @@ router.delete(
           return res.status(401).json({
             error: "Invalid Token",
           });
+        }
+
+        if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid media ID" });
+        const media = await catalogRepository.getListingMediaById(req.params.id);
+        if (!media || !(await findOwnedListing(media.listing_id, decoded.userId))) {
+          return res.status(404).json({ error: "Listing media not found" });
         }
 
         const removed = await catalogRepository.deleteListingMedia(
@@ -706,9 +750,19 @@ router.delete(
 
 router.put("/listings/:id/inventory", async (req: Request, res: Response) => {
   try {
+    const userId = getBearerUserId(req);
+    if (!userId) return res.status(401).json({ error: "A valid bearer token is required" });
+    if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
+    if (!(await findOwnedListing(req.params.id, userId))) return res.status(404).json({ error: "Listing not found" });
+    const input = {
+      sku: req.body?.sku,
+      quantity_available: req.body?.quantity_available,
+      reserved_quantity: req.body?.reserved_quantity,
+      allow_backorder: req.body?.allow_backorder,
+    };
     const inventory = await catalogRepository.setListingInventory(
       req.params.id,
-      req.body,
+      input,
     );
     return res.json(inventory);
   } catch (error) {
@@ -722,9 +776,18 @@ router.put(
   "/listings/:id/service-meta",
   async (req: Request, res: Response) => {
     try {
+      const userId = getBearerUserId(req);
+      if (!userId) return res.status(401).json({ error: "A valid bearer token is required" });
+      if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
+      if (!(await findOwnedListing(req.params.id, userId))) return res.status(404).json({ error: "Listing not found" });
+      const input = {
+        service_duration_minutes: req.body?.service_duration_minutes,
+        delivery_mode: req.body?.delivery_mode,
+        service_area_json: req.body?.service_area_json,
+      };
       const serviceMeta = await catalogRepository.setListingServiceMeta(
         req.params.id,
-        req.body,
+        input,
       );
       return res.json(serviceMeta);
     } catch (error) {
@@ -741,6 +804,7 @@ router.post("/listings/:id/save", async (req: Request, res: Response) => {
     if (!userId) {
       return res.status(401).json({ error: "A valid bearer token is required" });
     }
+    if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
 
     const saved = await catalogRepository.saveListing(userId, req.params.id);
     return res.status(201).json(saved);
@@ -757,6 +821,7 @@ router.delete("/listings/:id/unsave", async (req: Request, res: Response) => {
     if (!userId) {
       return res.status(401).json({ error: "A valid bearer token is required" });
     }
+    if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
 
     const removed = await catalogRepository.unsaveListing(
       userId,

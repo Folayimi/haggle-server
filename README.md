@@ -1351,3 +1351,7 @@ Contact & Support
 Version: 1.0.0
 Last Updated: [Date]
 Status: Ready for Development Phase 1
+
+## Listing discovery, reviews, and analytics
+
+See [LISTING_DISCOVERY.md](./LISTING_DISCOVERY.md) for the implemented `/api/v1/catalog` endpoints, review rules, interaction tracking, ranking, and migration instructions.

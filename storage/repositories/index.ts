@@ -8,6 +8,7 @@ import { SessionsRepository } from "./sessions.repository";
 import { TrustRepository } from "./trust.repository";
 import { UsersRepository } from "./users.repository";
 import { WebrtcRepository } from "./webrtc.repository";
+import { ListingFeaturesRepository } from "./listing-features.repository";
 
 export const authRepository = new AuthRepository();
 export const usersRepository = new UsersRepository();
@@ -19,6 +20,7 @@ export const commerceRepository = new CommerceRepository();
 export const trustRepository = new TrustRepository();
 export const notificationsRepository = new NotificationsRepository();
 export const webrtcRepository = new WebrtcRepository();
+export const listingFeaturesRepository = new ListingFeaturesRepository();
 
 export * from "./auth.repository";
 export * from "./users.repository";
@@ -30,3 +32,4 @@ export * from "./commerce.repository";
 export * from "./trust.repository";
 export * from "./notifications.repository";
 export * from "./webrtc.repository";
+export * from "./listing-features.repository";

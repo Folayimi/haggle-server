@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
-import { authRepository, catalogRepository, usersRepository } from "../storage";
-import { getRequestUserId } from "./http";
+import { authRepository, catalogRepository, listingFeaturesRepository, usersRepository } from "../storage";
+import { getBearerUserId } from "./http";
 import {
   listingInventory,
   ListingStatus,
@@ -400,6 +400,12 @@ router.get("/listings/:id", async (req: Request, res: Response) => {
         return res.status(404).json({ error: "Listing not found" });
       }
 
+      if (listing.status === ListingStatus.PUBLISHED) {
+        const view = await listingFeaturesRepository.recordView(listing.id, decoded.userId);
+        if (view.viewCount !== null) listing.view_count = view.viewCount;
+        Object.assign(listing, { rating_summary: await listingFeaturesRepository.reviewSummary(listing.id) });
+      }
+
       return res.json({
         success: true,
         message: "listing found",
@@ -731,11 +737,9 @@ router.put(
 
 router.post("/listings/:id/save", async (req: Request, res: Response) => {
   try {
-    const userId = getRequestUserId(req);
+    const userId = getBearerUserId(req);
     if (!userId) {
-      return res
-        .status(400)
-        .json({ error: "x-user-id header or userId is required" });
+      return res.status(401).json({ error: "A valid bearer token is required" });
     }
 
     const saved = await catalogRepository.saveListing(userId, req.params.id);
@@ -749,11 +753,9 @@ router.post("/listings/:id/save", async (req: Request, res: Response) => {
 
 router.delete("/listings/:id/unsave", async (req: Request, res: Response) => {
   try {
-    const userId = getRequestUserId(req);
+    const userId = getBearerUserId(req);
     if (!userId) {
-      return res
-        .status(400)
-        .json({ error: "x-user-id header or userId is required" });
+      return res.status(401).json({ error: "A valid bearer token is required" });
     }
 
     const removed = await catalogRepository.unsaveListing(

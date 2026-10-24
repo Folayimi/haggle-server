@@ -155,6 +155,9 @@ export const ImpressionType = {
   WATCH: "watch",
   SHARE: "share",
   SAVE: "save",
+  UNSAVE: "unsave",
+  CONTACT_SELLER: "contact_seller",
+  NEGOTIATION_STARTED: "negotiation_started",
 } as const;
 
 // Negotiation and offers

@@ -93,6 +93,7 @@ CREATE TABLE "feed_impressions" (
 	"listing_id" uuid,
 	"impression_type" text NOT NULL,
 	"watch_ms" integer,
+	"dedupe_key" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -116,6 +117,21 @@ CREATE TABLE "listing_media" (
 	"height" integer,
 	"duration_seconds" integer,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "listing_reviews" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"listing_id" uuid NOT NULL,
+	"reviewer_user_id" uuid NOT NULL,
+	"rating" integer NOT NULL,
+	"title" text,
+	"comment" text,
+	"is_verified_purchase" boolean DEFAULT false NOT NULL,
+	"status" text DEFAULT 'published' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"deleted_at" timestamp with time zone,
+	CONSTRAINT "listing_reviews_rating_range_check" CHECK ("listing_reviews"."rating" between 1 and 5)
 );
 --> statement-breakpoint
 CREATE TABLE "listing_service_meta" (
@@ -547,6 +563,8 @@ ALTER TABLE "feed_impressions" ADD CONSTRAINT "feed_impressions_session_id_live_
 ALTER TABLE "feed_impressions" ADD CONSTRAINT "feed_impressions_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "listing_inventory" ADD CONSTRAINT "listing_inventory_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "listing_media" ADD CONSTRAINT "listing_media_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "listing_reviews" ADD CONSTRAINT "listing_reviews_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "listing_reviews" ADD CONSTRAINT "listing_reviews_reviewer_user_id_users_id_fk" FOREIGN KEY ("reviewer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "listing_service_meta" ADD CONSTRAINT "listing_service_meta_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "listings" ADD CONSTRAINT "listings_seller_id_users_id_fk" FOREIGN KEY ("seller_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "listings" ADD CONSTRAINT "listings_category_id_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -637,7 +655,13 @@ CREATE INDEX "email_verifications_expires_at_idx" ON "email_verifications" USING
 CREATE INDEX "feed_impressions_user_id_created_at_idx" ON "feed_impressions" USING btree ("user_id","created_at");--> statement-breakpoint
 CREATE INDEX "feed_impressions_session_id_idx" ON "feed_impressions" USING btree ("session_id");--> statement-breakpoint
 CREATE INDEX "feed_impressions_listing_id_idx" ON "feed_impressions" USING btree ("listing_id");--> statement-breakpoint
+CREATE INDEX "feed_impressions_listing_event_created_idx" ON "feed_impressions" USING btree ("listing_id","impression_type","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "feed_impressions_dedupe_key_unique" ON "feed_impressions" USING btree ("dedupe_key");--> statement-breakpoint
 CREATE INDEX "listing_media_listing_id_sort_order_idx" ON "listing_media" USING btree ("listing_id","sort_order");--> statement-breakpoint
+CREATE UNIQUE INDEX "listing_reviews_listing_reviewer_unique" ON "listing_reviews" USING btree ("listing_id","reviewer_user_id");--> statement-breakpoint
+CREATE INDEX "listing_reviews_listing_status_created_idx" ON "listing_reviews" USING btree ("listing_id","status","created_at");--> statement-breakpoint
+CREATE INDEX "listing_reviews_reviewer_created_idx" ON "listing_reviews" USING btree ("reviewer_user_id","created_at");--> statement-breakpoint
+CREATE INDEX "listing_reviews_rating_idx" ON "listing_reviews" USING btree ("rating");--> statement-breakpoint
 CREATE INDEX "listings_seller_id_status_created_at_idx" ON "listings" USING btree ("seller_id","status","created_at");--> statement-breakpoint
 CREATE INDEX "listings_category_id_status_created_at_idx" ON "listings" USING btree ("category_id","status","created_at");--> statement-breakpoint
 CREATE INDEX "listings_listing_type_status_idx" ON "listings" USING btree ("listing_type","status");--> statement-breakpoint

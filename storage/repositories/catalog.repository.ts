@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { BaseRepository } from "./base.repository";
 import {
   categories,
@@ -7,7 +7,7 @@ import {
   listings,
   listingServiceMeta,
 } from "../../src/db/schema/catalog";
-import { savedListings } from "../../src/db/schema/sessions";
+import { feedImpressions, savedListings } from "../../src/db/schema/sessions";
 import {
   CategoryKind,
   CategoryStatus,
@@ -277,26 +277,25 @@ export class CatalogRepository extends BaseRepository {
   }
 
   async saveListing(userId: string, listingId: string) {
-    const existing = await this.database
-      .select()
-      .from(savedListings)
-      .where(
-        and(
-          eq(savedListings.user_id, userId),
-          eq(savedListings.listing_id, listingId),
-        ),
-      );
-
-    if (existing.length > 0) {
-      return existing[0];
-    }
-
     const [saved] = await this.database
       .insert(savedListings)
       .values({ user_id: userId, listing_id: listingId })
+      .onConflictDoNothing()
       .returning();
 
-    return saved;
+    if (saved) {
+      await this.database.insert(feedImpressions).values({
+        user_id: userId,
+        listing_id: listingId,
+        impression_type: "save",
+      });
+      await this.database.update(listings).set({ save_count: sql`${listings.save_count} + 1` }).where(eq(listings.id, listingId));
+      return saved;
+    }
+
+    const [existing] = await this.database.select().from(savedListings).where(and(eq(savedListings.user_id, userId), eq(savedListings.listing_id, listingId)));
+
+    return existing;
   }
 
   async unsaveListing(userId: string, listingId: string) {
@@ -309,6 +308,11 @@ export class CatalogRepository extends BaseRepository {
         ),
       )
       .returning();
+
+    if (deleted.length > 0) {
+      await this.database.insert(feedImpressions).values({ user_id: userId, listing_id: listingId, impression_type: "unsave" });
+      await this.database.update(listings).set({ save_count: sql`greatest(${listings.save_count} - 1, 0)` }).where(eq(listings.id, listingId));
+    }
 
     return deleted.length > 0;
   }

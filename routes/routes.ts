@@ -9,10 +9,12 @@ import sessionsRouter from "./sessions";
 import trustRouter from "./trust";
 import usersRouter from "./users";
 import webrtcRouter from "./webrtc";
+import listingDiscoveryRouter from "./listing-discovery";
 
 export const registerRoutes = (app: Express) => {
   app.use("/api/v1/auth", authRouter);
   app.use("/api/v1/users", usersRouter);
+  app.use("/api/v1/catalog", listingDiscoveryRouter);
   app.use("/api/v1/catalog", catalogRouter);
   app.use("/api/v1/sessions", sessionsRouter);
   app.use("/api/v1/offers", offersRouter);

@@ -18,7 +18,9 @@ import {
   index,
   jsonb,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { users } from "./auth";
 import { orders } from "./commerce";
 import { listings } from "./catalog";
@@ -66,6 +68,31 @@ export const reviews = pgTable(
     reviewedUserIdIdx: index("reviews_reviewed_user_id_idx").on(
       table.reviewed_user_id,
     ),
+  }),
+);
+
+/** Listing reviews are separate from post-transaction user reviews. */
+export const listingReviews = pgTable(
+  "listing_reviews",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    listing_id: uuid("listing_id").notNull().references(() => listings.id, { onDelete: "cascade" }),
+    reviewer_user_id: uuid("reviewer_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    rating: integer("rating").notNull(),
+    title: text("title"),
+    comment: text("comment"),
+    is_verified_purchase: boolean("is_verified_purchase").notNull().default(false),
+    status: text("status", { enum: ["published", "hidden"] }).notNull().default("published"),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deleted_at: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => ({
+    listingReviewerUnique: uniqueIndex("listing_reviews_listing_reviewer_unique").on(table.listing_id, table.reviewer_user_id),
+    listingStatusCreatedIdx: index("listing_reviews_listing_status_created_idx").on(table.listing_id, table.status, table.created_at),
+    reviewerCreatedIdx: index("listing_reviews_reviewer_created_idx").on(table.reviewer_user_id, table.created_at),
+    ratingIdx: index("listing_reviews_rating_idx").on(table.rating),
+    ratingRangeCheck: check("listing_reviews_rating_range_check", sql`${table.rating} between 1 and 5`),
   }),
 );
 

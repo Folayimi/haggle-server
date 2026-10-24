@@ -410,9 +410,13 @@ export const feedImpressions = pgTable(
         ImpressionType.WATCH,
         ImpressionType.SHARE,
         ImpressionType.SAVE,
+        ImpressionType.UNSAVE,
+        ImpressionType.CONTACT_SELLER,
+        ImpressionType.NEGOTIATION_STARTED,
       ],
     }).notNull(),
     watch_ms: integer("watch_ms"), // Milliseconds watched
+    dedupe_key: text("dedupe_key"),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -424,6 +428,14 @@ export const feedImpressions = pgTable(
     ),
     sessionIdIdx: index("feed_impressions_session_id_idx").on(table.session_id),
     listingIdIdx: index("feed_impressions_listing_id_idx").on(table.listing_id),
+    listingEventCreatedIdx: index("feed_impressions_listing_event_created_idx").on(
+      table.listing_id,
+      table.impression_type,
+      table.created_at,
+    ),
+    dedupeKeyUnique: uniqueIndex("feed_impressions_dedupe_key_unique").on(
+      table.dedupe_key,
+    ),
   }),
 );
 

@@ -48,7 +48,7 @@ import {
   shipments,
   sellerPayouts,
 } from "./commerce";
-import { reviews, verificationSubmissions, reports, blocks } from "./trust";
+import { reviews, listingReviews, verificationSubmissions, reports, blocks } from "./trust";
 import { notifications, notificationDeliveries } from "./notifications";
 
 // ============================================================================
@@ -113,6 +113,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
 
   // Trust & Safety
   reviews_as_reviewer: many(reviews, { relationName: "reviews_reviewer" }),
+  listing_reviews: many(listingReviews),
   reviews_as_reviewed: many(reviews, { relationName: "reviews_reviewed" }),
   reports_as_reporter: many(reports, { relationName: "reports_reporter" }),
   reports_as_reported: many(reports, { relationName: "reports_reported" }),
@@ -204,6 +205,7 @@ export const listingsRelations = relations(listings, ({ one, many }) => ({
   negotiation_threads: many(negotiationThreads),
   offers: many(offers),
   order_items: many(orderItems),
+  reviews: many(listingReviews),
 }));
 
 export const listingMediaRelations = relations(listingMedia, ({ one }) => ({
@@ -614,6 +616,11 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
     references: [users.id],
     relationName: "reviews_reviewed",
   }),
+}));
+
+export const listingReviewsRelations = relations(listingReviews, ({ one }) => ({
+  listing: one(listings, { fields: [listingReviews.listing_id], references: [listings.id] }),
+  reviewer: one(users, { fields: [listingReviews.reviewer_user_id], references: [users.id] }),
 }));
 
 export const verificationSubmissionsRelations = relations(

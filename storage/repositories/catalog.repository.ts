@@ -128,6 +128,34 @@ export class CatalogRepository extends BaseRepository {
       .orderBy(desc(listings.created_at));
   }
 
+  async listSavedListings(userId: string, limit: number, offset: number) {
+    const [rows, countResult] = await Promise.all([
+      this.database
+        .select({
+          listing: listings,
+          saved_at: savedListings.created_at,
+        })
+        .from(savedListings)
+        .innerJoin(listings, eq(savedListings.listing_id, listings.id))
+        .where(eq(savedListings.user_id, userId))
+        .orderBy(desc(savedListings.created_at), desc(listings.id))
+        .limit(limit)
+        .offset(offset),
+      this.database
+        .select({ total: sql<number>`count(*)::int` })
+        .from(savedListings)
+        .where(eq(savedListings.user_id, userId)),
+    ]);
+
+    return {
+      listings: rows.map(({ listing, saved_at }) => ({
+        ...listing,
+        saved_at,
+      })),
+      total: countResult[0]?.total ?? 0,
+    };
+  }
+
   async getListingById(listingId: string) {
     const [listing, media, inventory, serviceMeta] = await Promise.all([
       this.database.select().from(listings).where(eq(listings.id, listingId)),

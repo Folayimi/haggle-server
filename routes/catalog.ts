@@ -385,6 +385,49 @@ router.post("/listings", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/listings/saved", async (req: Request, res: Response) => {
+  const userId = getBearerUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: "A valid bearer token is required" });
+  }
+
+  const limit = Number(req.query.limit ?? 20);
+  const page = Number(req.query.page ?? 1);
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 50 ||
+    !Number.isInteger(page) ||
+    page < 1 ||
+    page > 10000
+  ) {
+    return res.status(400).json({ error: "Invalid pagination options" });
+  }
+
+  try {
+    const result = await catalogRepository.listSavedListings(
+      userId,
+      limit,
+      (page - 1) * limit,
+    );
+    return res.json({
+      success: true,
+      message: "Saved listings found",
+      data: result.listings,
+      pagination: {
+        page,
+        limit,
+        total: result.total,
+        totalPages: Math.ceil(result.total / limit),
+      },
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: "Failed to fetch saved listings", details: error });
+  }
+});
+
 router.get("/listings/:id", async (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;

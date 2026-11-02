@@ -105,12 +105,15 @@ export {
   negotiationThreads,
   offers,
   negotiationEvents,
+  deals,
   type InsertNegotiationThread,
   type SelectNegotiationThread,
   type InsertOffer,
   type SelectOffer,
   type InsertNegotiationEvent,
   type SelectNegotiationEvent,
+  type InsertDeal,
+  type SelectDeal,
 } from "./negotiation";
 
 // Messaging

@@ -58,8 +58,6 @@ router.post("/signup", async (req: Request, res: Response) => {
       provider_uid?: string;
       avatar_url?: string;
       bio?: string;
-      country_code?: string;
-      city?: string;
       response_time_label?: string;
     };
 

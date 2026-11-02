@@ -1,87 +1,71 @@
 import { Router, type Request, type Response } from "express";
 import { negotiationRepository } from "../storage";
-import { getRequestUserId } from "./http";
+import { getBearerUserId } from "./http";
 
 const router = Router();
 
-router.post("/", async (req: Request, res: Response) => {
+const actor = (req: Request, res: Response) => {
+  const userId = getBearerUserId(req);
+  if (!userId) res.status(401).json({ error: "Invalid or expired token" });
+  return userId;
+};
+
+const failure = (res: Response, error: unknown) => {
+  const message = error instanceof Error ? error.message : "Offer action failed";
+  const status = message.includes("not found") ? 404 :
+    message.includes("Only") ? 403 :
+    message.includes("expired") || message.includes("already") ? 409 : 400;
+  return res.status(status).json({ error: message });
+};
+
+router.post("/:id/counter", async (req: Request, res: Response) => {
   try {
-    const senderUserId = getRequestUserId(req);
-    const body = req.body as {
-      listing_id?: string;
-      buyer_id?: string;
-      seller_id?: string;
-      amount?: string;
-      currency?: string;
-    };
-
-    if (!senderUserId || !body.listing_id || !body.buyer_id || !body.seller_id || !body.amount) {
-      return res.status(400).json({
-        error: "listing_id, buyer_id, seller_id and amount are required",
-      });
+    const userId = actor(req, res);
+    if (!userId) return;
+    const body = req.body as { amount?: string | number; currency?: string };
+    if (body.amount === undefined || !body.currency) {
+      return res.status(400).json({ error: "amount and currency are required" });
     }
-
-    const offer = await negotiationRepository.createOffer({
-      listing_id: body.listing_id,
-      buyer_id: body.buyer_id,
-      seller_id: body.seller_id,
-      sender_user_id: senderUserId,
-      amount: body.amount,
-      currency: body.currency,
-    });
-
-    return res.status(201).json(offer);
+    return res.status(201).json(
+      await negotiationRepository.counterNegotiationOffer(
+        req.params.id,
+        userId,
+        String(body.amount),
+        body.currency,
+      ),
+    );
   } catch (error) {
-    return res.status(500).json({ error: "Failed to create offer", details: error });
+    return failure(res, error);
   }
 });
 
-router.put("/:id/accept", async (req: Request, res: Response) => {
+router.post("/:id/accept", async (req: Request, res: Response) => {
   try {
-    const actorUserId = getRequestUserId(req);
-    const thread = await negotiationRepository.acceptOffer(req.params.id, actorUserId);
-    if (!thread) {
-      return res.status(404).json({ error: "Offer not found" });
-    }
-
-    return res.json(thread);
+    const userId = actor(req, res);
+    if (!userId) return;
+    return res.json(await negotiationRepository.acceptNegotiationOffer(req.params.id, userId));
   } catch (error) {
-    return res.status(500).json({ error: "Failed to accept offer", details: error });
+    return failure(res, error);
   }
 });
 
-router.put("/:id/counter", async (req: Request, res: Response) => {
+router.post("/:id/reject", async (req: Request, res: Response) => {
   try {
-    const senderUserId = getRequestUserId(req);
-    const body = req.body as { amount?: string; currency?: string };
-
-    if (!senderUserId || !body.amount) {
-      return res.status(400).json({ error: "userId and amount are required" });
-    }
-
-    const offer = await negotiationRepository.counterOffer(req.params.id, {
-      sender_user_id: senderUserId,
-      amount: body.amount,
-      currency: body.currency,
-    });
-
-    return res.json(offer);
+    const userId = actor(req, res);
+    if (!userId) return;
+    return res.json(await negotiationRepository.rejectNegotiationOffer(req.params.id, userId));
   } catch (error) {
-    return res.status(500).json({ error: "Failed to counter offer", details: error });
+    return failure(res, error);
   }
 });
 
-router.put("/:id/reject", async (req: Request, res: Response) => {
+router.post("/:id/withdraw", async (req: Request, res: Response) => {
   try {
-    const actorUserId = getRequestUserId(req);
-    const thread = await negotiationRepository.rejectOffer(req.params.id, actorUserId);
-    if (!thread) {
-      return res.status(404).json({ error: "Offer not found" });
-    }
-
-    return res.json(thread);
+    const userId = actor(req, res);
+    if (!userId) return;
+    return res.json(await negotiationRepository.withdrawNegotiationOffer(req.params.id, userId));
   } catch (error) {
-    return res.status(500).json({ error: "Failed to reject offer", details: error });
+    return failure(res, error);
   }
 });
 

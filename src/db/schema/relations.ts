@@ -33,7 +33,7 @@ import {
   liveReminders,
   feedImpressions,
 } from "./sessions";
-import { negotiationThreads, offers, negotiationEvents } from "./negotiation";
+import { negotiationThreads, offers, negotiationEvents, deals } from "./negotiation";
 import {
   conversations,
   conversationParticipants,
@@ -371,6 +371,10 @@ export const feedImpressionsRelations = relations(
 export const negotiationThreadsRelations = relations(
   negotiationThreads,
   ({ one, many }) => ({
+    conversation: one(conversations, {
+      fields: [negotiationThreads.conversation_id],
+      references: [conversations.id],
+    }),
     session: one(liveSessions, {
       fields: [negotiationThreads.session_id],
       references: [liveSessions.id],
@@ -395,6 +399,7 @@ export const negotiationThreadsRelations = relations(
     }),
     offers: many(offers),
     events: many(negotiationEvents),
+    deals: many(deals),
     orders: many(orders),
   }),
 );
@@ -465,6 +470,7 @@ export const conversationsRelations = relations(
     }),
     participants: many(conversationParticipants),
     messages: many(messages),
+    negotiations: many(negotiationThreads),
   }),
 );
 
@@ -522,6 +528,27 @@ export const messageReceiptsRelations = relations(
     }),
   }),
 );
+
+export const dealsRelations = relations(deals, ({ one }) => ({
+  negotiation: one(negotiationThreads, {
+    fields: [deals.negotiation_id],
+    references: [negotiationThreads.id],
+  }),
+  accepted_offer: one(offers, {
+    fields: [deals.accepted_offer_id],
+    references: [offers.id],
+  }),
+  buyer: one(users, {
+    fields: [deals.buyer_id],
+    references: [users.id],
+    relationName: "deal_buyer",
+  }),
+  seller: one(users, {
+    fields: [deals.seller_id],
+    references: [users.id],
+    relationName: "deal_seller",
+  }),
+}));
 
 // ============================================================================
 // COMMERCE RELATIONS

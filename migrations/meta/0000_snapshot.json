@@ -1,5 +1,5 @@
 {
-  "id": "2c6f7003-8da0-4609-b58d-b8e44cb7c712",
+  "id": "eae8fcf1-41ce-4431-8341-a6f3e2c94937",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -5274,6 +5274,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "country_code": {
+          "name": "country_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "state": {
           "name": "state",
           "type": "text",
@@ -5418,14 +5424,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "country_code": {
-          "name": "country_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "city": {
-          "name": "city",
+        "website_address": {
+          "name": "website_address",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -5515,21 +5515,6 @@
           "columns": [
             {
               "expression": "username",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "user_profiles_country_code_idx": {
-          "name": "user_profiles_country_code_idx",
-          "columns": [
-            {
-              "expression": "country_code",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

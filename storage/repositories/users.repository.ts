@@ -18,8 +18,7 @@ export interface UpdateCurrentUserInput {
   username?: string;
   avatar_url?: string;
   bio?: string;
-  country_code?: string;
-  city?: string;
+  website_address?: string;
   response_time_label?: string;
   push_enabled?: boolean;
   sms_enabled?: boolean;
@@ -44,11 +43,26 @@ export interface CreateAddressInput {
   recipient_name: string;
   phone_e164: string;
   country: string;
+  country_code: string;
   state: string;
   city: string;
   line_1: string;
   line_2?: string;
   postal_code: string;
+  is_default?: boolean;
+}
+
+export interface UpdateAddressInput {
+  label?: string;
+  recipient_name?: string;
+  phone_e164?: string;
+  country?: string;
+  country_code?: string;
+  state?: string;
+  city?: string;
+  line_1?: string;
+  line_2?: string;
+  postal_code?: string;
   is_default?: boolean;
 }
 
@@ -96,8 +110,7 @@ export class UsersRepository extends BaseRepository {
       username: input.username,
       avatar_url: input.avatar_url,
       bio: input.bio,
-      country_code: input.country_code,
-      city: input.city,
+      website_address: input.website_address,
       business_name: input.business_name,
       trade_mark: input.trade_mark,
       cover_image_url: input.cover_image_url,
@@ -124,8 +137,7 @@ export class UsersRepository extends BaseRepository {
           email: input.email ?? "sample@gmail.com",
           avatar_url: input.avatar_url,
           bio: input.bio,
-          country_code: input.country_code,
-          city: input.city,
+          website_address: input.website_address,
           business_name: input.business_name,
           trade_mark: input.trade_mark,
           cover_image_url: input.cover_image_url,
@@ -250,5 +262,21 @@ export class UsersRepository extends BaseRepository {
       .from(userAddresses)
       .where(eq(userAddresses.user_id, userId))
       .orderBy(desc(userAddresses.created_at));
+  }
+
+  async updateAddress(
+    addressId: string,
+    userId: string,
+    input: UpdateAddressInput,
+  ) {
+    const [address] = await this.database
+      .update(userAddresses)
+      .set({ ...this.pickDefined({ ...input }), updated_at: new Date() })
+      .where(
+        and(eq(userAddresses.id, addressId), eq(userAddresses.user_id, userId)),
+      )
+      .returning();
+
+    return address ?? null;
   }
 }

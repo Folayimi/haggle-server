@@ -16,10 +16,12 @@ import {
   decimal,
   index,
   jsonb,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { users } from "./auth";
 import { listings } from "./catalog";
 import { liveSessions } from "./sessions";
+import { conversations } from "./messaging";
 import {
   NegotiationEventType,
   NegotiationThreadStatus,
@@ -35,6 +37,8 @@ export const negotiationThreads = pgTable(
   "negotiation_threads",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    conversation_id: uuid("conversation_id")
+      .references(() => conversations.id, { onDelete: "cascade" }),
     session_id: uuid("session_id").references(() => liveSessions.id, {
       onDelete: "cascade",
     }),
@@ -56,6 +60,7 @@ export const negotiationThreads = pgTable(
         NegotiationThreadStatus.REJECTED,
         NegotiationThreadStatus.EXPIRED,
         NegotiationThreadStatus.CANCELLED,
+        "completed",
       ],
     })
       .notNull()
@@ -66,6 +71,8 @@ export const negotiationThreads = pgTable(
       precision: 12,
       scale: 2,
     }).notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    variant_snapshot: jsonb("variant_snapshot"),
     last_offer_at: timestamp("last_offer_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -77,6 +84,10 @@ export const negotiationThreads = pgTable(
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (table) => ({
     sellerStatusIdx: index(
@@ -90,6 +101,9 @@ export const negotiationThreads = pgTable(
     ),
     sessionIdIdx: index("negotiation_threads_session_id_idx").on(
       table.session_id,
+    ),
+    conversationIdIdx: index("negotiation_threads_conversation_id_idx").on(
+      table.conversation_id,
     ),
     expiresAtIdx: index("negotiation_threads_expires_at_idx").on(
       table.expires_at,
@@ -119,6 +133,7 @@ export const offers = pgTable(
     sender_user_id: uuid("sender_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("pending"),
 
     // Offer type
     offer_kind: text("offer_kind", {
@@ -227,9 +242,39 @@ export const negotiationEvents = pgTable(
   }),
 );
 
+export const deals = pgTable(
+  "deals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    negotiation_id: uuid("negotiation_id")
+      .notNull()
+      .unique()
+      .references(() => negotiationThreads.id, { onDelete: "cascade" }),
+    accepted_offer_id: uuid("accepted_offer_id")
+      .notNull()
+      .references(() => offers.id, { onDelete: "restrict" }),
+    buyer_id: uuid("buyer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    seller_id: uuid("seller_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    listing_id: uuid("listing_id").notNull().references(() => listings.id, { onDelete: "cascade" }),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    currency: text("currency").notNull(),
+    quantity: integer("quantity").notNull(),
+    variant_snapshot: jsonb("variant_snapshot"),
+    status: text("status").notNull().default("agreed"),
+    accepted_at: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    buyerIdx: index("deals_buyer_id_created_at_idx").on(table.buyer_id, table.created_at),
+    sellerIdx: index("deals_seller_id_created_at_idx").on(table.seller_id, table.created_at),
+  }),
+);
+
 // Type inference for INSERT and SELECT operations
 export type InsertNegotiationThread = typeof negotiationThreads.$inferInsert;
 export type SelectNegotiationThread = typeof negotiationThreads.$inferSelect;
+export type InsertDeal = typeof deals.$inferInsert;
+export type SelectDeal = typeof deals.$inferSelect;
 
 export type InsertOffer = typeof offers.$inferInsert;
 export type SelectOffer = typeof offers.$inferSelect;

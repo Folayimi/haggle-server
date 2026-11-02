@@ -65,7 +65,7 @@ Manages user profile data, seller business information, addresses, and preferenc
 **userProfiles**
 
 - Public profile shown in chat, reviews, and seller profiles
-- Fields: `user_id` (PK), `full_name`, `username` (unique), `avatar_url`, `bio`, `country_code`, `city`, `response_time_label`
+- Fields: `user_id` (PK), `full_name`, `username` (unique), `avatar_url`, `bio`, `website_address`, `response_time_label`
 
 **sellerProfiles**
 
@@ -78,7 +78,7 @@ Manages user profile data, seller business information, addresses, and preferenc
 
 - Shipping addresses for buyers, pickup addresses for sellers
 - Multiple addresses per user with default tracking
-- Fields: `id`, `user_id`, `label`, `recipient_name`, `phone_e164`, `country`, `state`, `city`, `line_1`, `line_2`, `postal_code`, `is_default`
+- Fields: `id`, `user_id`, `label`, `recipient_name`, `phone_e164`, `country`, `country_code`, `state`, `city`, `line_1`, `line_2`, `postal_code`, `is_default`
 
 **userSettings**
 
@@ -248,7 +248,8 @@ Direct messaging between buyers and sellers, with flexible message types and del
 
 **messages**
 
-- Text, voice notes, images, product shares, system messages
+- Text, voice notes, images, product shares, system, offer, negotiation-event,
+  and deal-event messages
 - Supports soft deletes (deleted_at) for audit trails
 - Fields: `id`, `conversation_id`, `sender_user_id`, `message_type`, `text_body`, `voice_url`, `voice_duration_seconds`, `shared_listing_id`, `metadata_json`, `created_at`, `edited_at`, `deleted_at`
 
@@ -263,6 +264,13 @@ Direct messaging between buyers and sellers, with flexible message types and del
 - Granular tracking per user
 - Fields: `message_id`, `user_id`, `status`, `updated_at`
 - Unique constraint on `(message_id, user_id)`
+
+**deals**
+
+- Immutable commercial snapshot created when a pending offer is accepted
+- Fields: `negotiation_id`, `accepted_offer_id`, `buyer_id`, `seller_id`,
+  `listing_id`, `amount`, `currency`, `quantity`, `variant_snapshot`, `status`,
+  `accepted_at`
 
 ---
 

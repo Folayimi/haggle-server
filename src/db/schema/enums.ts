@@ -203,6 +203,9 @@ export const MessageType = {
   IMAGE: "image",
   PRODUCT_SHARE: "product_share",
   SYSTEM: "system",
+  OFFER: "offer",
+  NEGOTIATION_EVENT: "negotiation_event",
+  DEAL_EVENT: "deal_event",
 } as const;
 
 export const MessageReceiptStatus = {

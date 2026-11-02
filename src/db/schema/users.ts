@@ -52,8 +52,7 @@ export const userProfiles = pgTable(
       .default(UserPrimaryRole.BUYER),
     avatar_url: text("avatar_url"),
     bio: text("bio"),
-    country_code: text("country_code"), // e.g., 'US', 'NG', 'UK'
-    city: text("city"),
+    website_address: text("website_address"),
     business_name: text("business_name"),
     trade_mark: text("trade_mark"), // Optional trademark
     cover_image_url: text("cover_image_url"), // Shop banner
@@ -87,7 +86,6 @@ export const userProfiles = pgTable(
   },
   (table) => ({
     usernameIdx: index("user_profiles_username_idx").on(table.username),
-    countryIdx: index("user_profiles_country_code_idx").on(table.country_code),
     verificationStatusIdx: index("user_profiles_verification_status_idx").on(
       table.verification_status,
     ),
@@ -110,6 +108,7 @@ export const userAddresses = pgTable(
     recipient_name: text("recipient_name").notNull(),
     phone_e164: text("phone_e164").notNull(), // Phone in E.164 format
     country: text("country").notNull(),
+    country_code: text("country_code").notNull(), // ISO 3166-1 alpha-2 code
     state: text("state").notNull(),
     city: text("city").notNull(),
     line_1: text("line_1").notNull(), // Street address

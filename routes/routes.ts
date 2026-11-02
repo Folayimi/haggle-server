@@ -10,6 +10,7 @@ import trustRouter from "./trust";
 import usersRouter from "./users";
 import webrtcRouter from "./webrtc";
 import listingDiscoveryRouter from "./listing-discovery";
+import negotiationsRouter from "./negotiations";
 
 export const registerRoutes = (app: Express) => {
   app.use("/api/v1/auth", authRouter);
@@ -18,6 +19,7 @@ export const registerRoutes = (app: Express) => {
   app.use("/api/v1/catalog", catalogRouter);
   app.use("/api/v1/sessions", sessionsRouter);
   app.use("/api/v1/offers", offersRouter);
+  app.use("/api/v1/negotiations", negotiationsRouter);
   app.use("/api/v1/conversations", conversationsRouter);
   app.use("/api/v1/orders", ordersRouter);
   app.use("/api/v1/notifications", notificationsRouter);

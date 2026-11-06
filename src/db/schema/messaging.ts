@@ -28,6 +28,8 @@ import {
   MessageReceiptStatus,
   MessageType,
 } from "./enums";
+import { negotiationThreads } from "./negotiation";
+import { jsonb } from "drizzle-orm/pg-core";
 
 /**
  * CONVERSATIONS TABLE
@@ -116,6 +118,13 @@ export const messages = pgTable(
     conversation_id: uuid("conversation_id")
       .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
+    negotiation_thread_id: uuid("negotiation_thread_id").references(
+      () => negotiationThreads.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    listing: jsonb("listing").notNull().default({}),
     sender_user_id: uuid("sender_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

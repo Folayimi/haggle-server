@@ -74,6 +74,23 @@ CREATE TABLE "conversations" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "deals" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"negotiation_id" uuid NOT NULL,
+	"accepted_offer_id" uuid NOT NULL,
+	"buyer_id" uuid NOT NULL,
+	"seller_id" uuid NOT NULL,
+	"listing_id" uuid NOT NULL,
+	"amount" numeric(12, 2) NOT NULL,
+	"currency" text NOT NULL,
+	"quantity" integer NOT NULL,
+	"variant_snapshot" jsonb,
+	"status" text DEFAULT 'agreed' NOT NULL,
+	"accepted_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "deals_negotiation_id_unique" UNIQUE("negotiation_id")
+);
+--> statement-breakpoint
 CREATE TABLE "email_verifications" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -257,6 +274,8 @@ CREATE TABLE "message_receipts" (
 CREATE TABLE "messages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"conversation_id" uuid NOT NULL,
+	"negotiation_thread_id" uuid,
+	"listing" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"sender_user_id" uuid NOT NULL,
 	"message_type" text NOT NULL,
 	"text_body" text,
@@ -281,16 +300,20 @@ CREATE TABLE "negotiation_events" (
 --> statement-breakpoint
 CREATE TABLE "negotiation_threads" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"conversation_id" uuid,
 	"session_id" uuid,
 	"listing_id" uuid NOT NULL,
 	"buyer_id" uuid NOT NULL,
 	"seller_id" uuid NOT NULL,
 	"status" text DEFAULT 'active' NOT NULL,
 	"current_offer_amount" numeric(12, 2) NOT NULL,
+	"quantity" integer DEFAULT 1 NOT NULL,
+	"variant_snapshot" jsonb,
 	"last_offer_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
 	"accepted_offer_id" uuid,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "notification_deliveries" (
@@ -321,9 +344,10 @@ CREATE TABLE "offers" (
 	"session_id" uuid,
 	"listing_id" uuid NOT NULL,
 	"sender_user_id" uuid NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
 	"offer_kind" text NOT NULL,
 	"amount" numeric(12, 2) NOT NULL,
-	"currency" text DEFAULT 'USD' NOT NULL,
+	"currency" text DEFAULT 'NGN' NOT NULL,
 	"sequence_no" integer NOT NULL,
 	"parent_offer_id" uuid,
 	"expires_at" timestamp with time zone,
@@ -452,6 +476,7 @@ CREATE TABLE "user_addresses" (
 	"recipient_name" text NOT NULL,
 	"phone_e164" text NOT NULL,
 	"country" text NOT NULL,
+	"country_code" text NOT NULL,
 	"state" text NOT NULL,
 	"city" text NOT NULL,
 	"line_1" text NOT NULL,
@@ -471,8 +496,7 @@ CREATE TABLE "user_profiles" (
 	"primary_role" text DEFAULT 'buyer' NOT NULL,
 	"avatar_url" text,
 	"bio" text,
-	"country_code" text,
-	"city" text,
+	"website_address" text,
 	"business_name" text,
 	"trade_mark" text,
 	"cover_image_url" text,
@@ -557,6 +581,11 @@ ALTER TABLE "conversation_participants" ADD CONSTRAINT "conversation_participant
 ALTER TABLE "conversations" ADD CONSTRAINT "conversations_seller_id_users_id_fk" FOREIGN KEY ("seller_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "conversations" ADD CONSTRAINT "conversations_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "conversations" ADD CONSTRAINT "conversations_session_id_live_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."live_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "deals" ADD CONSTRAINT "deals_negotiation_id_negotiation_threads_id_fk" FOREIGN KEY ("negotiation_id") REFERENCES "public"."negotiation_threads"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "deals" ADD CONSTRAINT "deals_accepted_offer_id_offers_id_fk" FOREIGN KEY ("accepted_offer_id") REFERENCES "public"."offers"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "deals" ADD CONSTRAINT "deals_buyer_id_users_id_fk" FOREIGN KEY ("buyer_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "deals" ADD CONSTRAINT "deals_seller_id_users_id_fk" FOREIGN KEY ("seller_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "deals" ADD CONSTRAINT "deals_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "email_verifications" ADD CONSTRAINT "email_verifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feed_impressions" ADD CONSTRAINT "feed_impressions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feed_impressions" ADD CONSTRAINT "feed_impressions_session_id_live_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."live_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -581,11 +610,13 @@ ALTER TABLE "message_attachments" ADD CONSTRAINT "message_attachments_message_id
 ALTER TABLE "message_receipts" ADD CONSTRAINT "message_receipts_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_receipts" ADD CONSTRAINT "message_receipts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messages" ADD CONSTRAINT "messages_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messages" ADD CONSTRAINT "messages_negotiation_thread_id_negotiation_threads_id_fk" FOREIGN KEY ("negotiation_thread_id") REFERENCES "public"."negotiation_threads"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messages" ADD CONSTRAINT "messages_sender_user_id_users_id_fk" FOREIGN KEY ("sender_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messages" ADD CONSTRAINT "messages_shared_listing_id_listings_id_fk" FOREIGN KEY ("shared_listing_id") REFERENCES "public"."listings"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "negotiation_events" ADD CONSTRAINT "negotiation_events_thread_id_negotiation_threads_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."negotiation_threads"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "negotiation_events" ADD CONSTRAINT "negotiation_events_session_id_live_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."live_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "negotiation_events" ADD CONSTRAINT "negotiation_events_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "negotiation_threads" ADD CONSTRAINT "negotiation_threads_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "negotiation_threads" ADD CONSTRAINT "negotiation_threads_session_id_live_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."live_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "negotiation_threads" ADD CONSTRAINT "negotiation_threads_listing_id_listings_id_fk" FOREIGN KEY ("listing_id") REFERENCES "public"."listings"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "negotiation_threads" ADD CONSTRAINT "negotiation_threads_buyer_id_users_id_fk" FOREIGN KEY ("buyer_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -647,6 +678,8 @@ CREATE INDEX "conversation_participants_conversation_id_idx" ON "conversation_pa
 CREATE INDEX "conversation_participants_user_id_idx" ON "conversation_participants" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "conversations_last_message_at_desc_idx" ON "conversations" USING btree ("last_message_at");--> statement-breakpoint
 CREATE INDEX "conversations_session_id_idx" ON "conversations" USING btree ("session_id");--> statement-breakpoint
+CREATE INDEX "deals_buyer_id_created_at_idx" ON "deals" USING btree ("buyer_id","created_at");--> statement-breakpoint
+CREATE INDEX "deals_seller_id_created_at_idx" ON "deals" USING btree ("seller_id","created_at");--> statement-breakpoint
 CREATE INDEX "email_verifications_user_id_idx" ON "email_verifications" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "email_verifications_email_idx" ON "email_verifications" USING btree ("email");--> statement-breakpoint
 CREATE INDEX "email_verifications_token_idx" ON "email_verifications" USING btree ("token");--> statement-breakpoint
@@ -685,6 +718,7 @@ CREATE INDEX "negotiation_threads_seller_id_status_last_offer_at_idx" ON "negoti
 CREATE INDEX "negotiation_threads_buyer_id_status_last_offer_at_idx" ON "negotiation_threads" USING btree ("buyer_id","status","last_offer_at");--> statement-breakpoint
 CREATE INDEX "negotiation_threads_listing_id_idx" ON "negotiation_threads" USING btree ("listing_id");--> statement-breakpoint
 CREATE INDEX "negotiation_threads_session_id_idx" ON "negotiation_threads" USING btree ("session_id");--> statement-breakpoint
+CREATE INDEX "negotiation_threads_conversation_id_idx" ON "negotiation_threads" USING btree ("conversation_id");--> statement-breakpoint
 CREATE INDEX "negotiation_threads_expires_at_idx" ON "negotiation_threads" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "notification_deliveries_notification_id_idx" ON "notification_deliveries" USING btree ("notification_id");--> statement-breakpoint
 CREATE INDEX "notification_deliveries_status_idx" ON "notification_deliveries" USING btree ("status");--> statement-breakpoint
@@ -693,6 +727,8 @@ CREATE INDEX "notifications_user_id_read_at_idx" ON "notifications" USING btree 
 CREATE INDEX "offers_thread_id_sequence_no_idx" ON "offers" USING btree ("thread_id","sequence_no");--> statement-breakpoint
 CREATE INDEX "offers_session_id_created_at_idx" ON "offers" USING btree ("session_id","created_at");--> statement-breakpoint
 CREATE INDEX "offers_parent_offer_id_idx" ON "offers" USING btree ("parent_offer_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "offers_one_pending_per_thread_uidx" ON "offers" USING btree ("thread_id") WHERE "offers"."status" = 'pending';--> statement-breakpoint
+CREATE UNIQUE INDEX "offers_thread_sequence_uidx" ON "offers" USING btree ("thread_id","sequence_no");--> statement-breakpoint
 CREATE INDEX "order_items_order_id_idx" ON "order_items" USING btree ("order_id");--> statement-breakpoint
 CREATE INDEX "orders_buyer_id_status_created_at_idx" ON "orders" USING btree ("buyer_id","status","created_at");--> statement-breakpoint
 CREATE INDEX "orders_seller_id_status_created_at_idx" ON "orders" USING btree ("seller_id","status","created_at");--> statement-breakpoint
@@ -716,7 +752,6 @@ CREATE INDEX "seller_payouts_seller_id_status_created_at_idx" ON "seller_payouts
 CREATE INDEX "shipments_order_id_idx" ON "shipments" USING btree ("order_id");--> statement-breakpoint
 CREATE INDEX "user_addresses_user_id_idx" ON "user_addresses" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "user_profiles_username_idx" ON "user_profiles" USING btree ("username");--> statement-breakpoint
-CREATE INDEX "user_profiles_country_code_idx" ON "user_profiles" USING btree ("country_code");--> statement-breakpoint
 CREATE INDEX "user_profiles_verification_status_idx" ON "user_profiles" USING btree ("verification_status");--> statement-breakpoint
 CREATE INDEX "user_sessions_user_id_idx" ON "user_sessions" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "user_sessions_refresh_token_idx" ON "user_sessions" USING btree ("refresh_token");--> statement-breakpoint

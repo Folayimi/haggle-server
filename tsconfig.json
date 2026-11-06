@@ -21,6 +21,14 @@
     "noFallthroughCasesInSwitch": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["index.ts", "src/**/*.ts", "routes/**/*.ts", "storage/**/*.ts"],
+  "include": [
+    "index.ts",
+    "server.ts",
+    "src/**/*.ts",
+    "routes/**/*.ts",
+    "storage/**/*.ts",
+    "jobs/**/*.ts",
+    "services/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist", "coverage"]
 }

@@ -11,13 +11,21 @@ const auth = (req: Request, res: Response) => {
 };
 
 const handleError = (res: Response, error: unknown) => {
+  console.error("Negotiation request failed", error);
   const message = error instanceof Error ? error.message : "Request failed";
   const status =
-    message.includes("not found") ? 404 :
+    message === "Conversation not found" || message === "Listing unavailable"
+      ? 404 :
     message.includes("not authorized") || message.includes("participant") ? 403 :
     message.includes("expired") || message.includes("inactive") ||
-    message.includes("already") || message.includes("cannot") ? 409 : 400;
-  return res.status(status).json({ error: message });
+    message.includes("already") || message.includes("cannot") ? 409 :
+    message === "Offer is below the seller's acceptable range" ? 422 :
+    message === "Offer amount must be positive" ||
+    message === "Offer currency does not match listing currency" ? 400 :
+    500;
+  return res.status(status).json({
+    error: status >= 500 ? "Failed to create negotiation" : message,
+  });
 };
 
 router.post("/", async (req: Request, res: Response) => {
@@ -45,7 +53,18 @@ router.post("/", async (req: Request, res: Response) => {
       quantity: body.quantity,
       variant_selection: body.variant_selection,
     });
-    return res.status(201).json(negotiation);
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: negotiation.id,
+        conversation_id: negotiation.conversation_id,
+        listing_id: negotiation.listing_id,
+        buyer_id: negotiation.buyer_id,
+        seller_id: negotiation.seller_id,
+        status: negotiation.status,
+        quantity: negotiation.quantity,
+      },
+    });
   } catch (error) {
     return handleError(res, error);
   }

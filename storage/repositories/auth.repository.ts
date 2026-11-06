@@ -361,7 +361,10 @@ export class AuthRepository extends BaseRepository {
       });
 
       try {
-        const supportEmail = process.env.EMAIL_USER ?? "";
+        const supportEmail =
+          process.env.EMAIL_SUPPORT?.trim() ||
+          process.env.EMAIL_REPLY_TO?.trim() ||
+          "support@haggle.com.ng";
 
         await sendAppOtpEmail({
           email,

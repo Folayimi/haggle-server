@@ -167,6 +167,7 @@ export const NegotiationThreadStatus = {
   REJECTED: "rejected",
   EXPIRED: "expired",
   CANCELLED: "cancelled",
+  COMPLETED: "completed",
 } as const;
 
 export const OfferKind = {

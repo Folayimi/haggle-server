@@ -1,6 +1,11 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
-import { authRepository, catalogRepository, listingFeaturesRepository, usersRepository } from "../storage";
+import {
+  authRepository,
+  catalogRepository,
+  listingFeaturesRepository,
+  usersRepository,
+} from "../storage";
 import { getBearerUserId, isUuid } from "./http";
 import {
   listingInventory,
@@ -28,7 +33,9 @@ router.use(async (req: Request, res: Response, next) => {
     if (!user) return res.status(401).json({ error: "Invalid token user" });
     return next();
   } catch (error) {
-    return res.status(500).json({ error: "Failed to authenticate request", details: error });
+    return res
+      .status(500)
+      .json({ error: "Failed to authenticate request", details: error });
   }
 });
 
@@ -236,50 +243,50 @@ router.get(
   },
 );
 
-const getListings = (
-  listingType?: (typeof ListingType)[keyof typeof ListingType],
-) => async (req: Request, res: Response) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        error: "No token provided",
-      });
-    }
-
-    const token = authHeader.split(" ")[1];
+const getListings =
+  (listingType?: (typeof ListingType)[keyof typeof ListingType]) =>
+  async (req: Request, res: Response) => {
     try {
-      const decoded = verifyAccessToken(token);
-      // Get user data
-      const userData = await usersRepository.getUserById(decoded.userId);
-
-      if (!userData) {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({
-          error: "Invalid Token",
+          error: "No token provided",
         });
       }
 
-      const listings = await catalogRepository.listListings(
-        undefined,
-        listingType,
-      );
+      const token = authHeader.split(" ")[1];
+      try {
+        const decoded = verifyAccessToken(token);
+        // Get user data
+        const userData = await usersRepository.getUserById(decoded.userId);
 
-      return res.json({
-        success: true,
-        message: "listings found",
-        data: listings,
-      });
-    } catch (jwtError) {
-      return res.status(401).json({
-        error: "Invalid or expired token",
-      });
+        if (!userData) {
+          return res.status(401).json({
+            error: "Invalid Token",
+          });
+        }
+
+        const listings = await catalogRepository.listListings(
+          undefined,
+          listingType,
+        );
+
+        return res.json({
+          success: true,
+          message: "listings found",
+          data: listings,
+        });
+      } catch (jwtError) {
+        return res.status(401).json({
+          error: "Invalid or expired token",
+        });
+      }
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ error: "Failed to fetch listings", details: error });
     }
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ error: "Failed to fetch listings", details: error });
-  }
-};
+  };
 
 router.get("/listings/product", getListings(ListingType.PRODUCT));
 router.get("/listings/services", getListings(ListingType.SERVICE));
@@ -330,7 +337,11 @@ router.post("/listings", async (req: Request, res: Response) => {
     };
 
     if (body.seller_id && body.seller_id !== decoded.userId) {
-      return res.status(403).json({ error: "Listings can only be created for the authenticated seller" });
+      return res
+        .status(403)
+        .json({
+          error: "Listings can only be created for the authenticated seller",
+        });
     }
 
     // 1. Sanitize numeric fields
@@ -338,6 +349,7 @@ router.post("/listings", async (req: Request, res: Response) => {
 
     // 2. Validate required fields (using sanitizedBody)
     if (
+      !sanitizedBody.seller_id ||
       !sanitizedBody.listing_type ||
       !sanitizedBody.category_id ||
       !sanitizedBody.title ||
@@ -347,7 +359,9 @@ router.post("/listings", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Missing required listing fields" });
     }
 
-    const listingMedias = Array.isArray(sanitizedBody.medias) ? sanitizedBody.medias : [];
+    const listingMedias = Array.isArray(sanitizedBody.medias)
+      ? sanitizedBody.medias
+      : [];
 
     const listing = await catalogRepository.createListing({
       seller_id: decoded.userId,
@@ -385,49 +399,6 @@ router.post("/listings", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/listings/saved", async (req: Request, res: Response) => {
-  const userId = getBearerUserId(req);
-  if (!userId) {
-    return res.status(401).json({ error: "A valid bearer token is required" });
-  }
-
-  const limit = Number(req.query.limit ?? 20);
-  const page = Number(req.query.page ?? 1);
-  if (
-    !Number.isInteger(limit) ||
-    limit < 1 ||
-    limit > 50 ||
-    !Number.isInteger(page) ||
-    page < 1 ||
-    page > 10000
-  ) {
-    return res.status(400).json({ error: "Invalid pagination options" });
-  }
-
-  try {
-    const result = await catalogRepository.listSavedListings(
-      userId,
-      limit,
-      (page - 1) * limit,
-    );
-    return res.json({
-      success: true,
-      message: "Saved listings found",
-      data: result.listings,
-      pagination: {
-        page,
-        limit,
-        total: result.total,
-        totalPages: Math.ceil(result.total / limit),
-      },
-    });
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ error: "Failed to fetch saved listings", details: error });
-  }
-});
-
 router.get("/listings/:id", async (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
@@ -461,9 +432,16 @@ router.get("/listings/:id", async (req: Request, res: Response) => {
       }
 
       if (listing.status === ListingStatus.PUBLISHED) {
-        const view = await listingFeaturesRepository.recordView(listing.id, decoded.userId);
+        const view = await listingFeaturesRepository.recordView(
+          listing.id,
+          decoded.userId,
+        );
         if (view.viewCount !== null) listing.view_count = view.viewCount;
-        Object.assign(listing, { rating_summary: await listingFeaturesRepository.reviewSummary(listing.id) });
+        Object.assign(listing, {
+          rating_summary: await listingFeaturesRepository.reviewSummary(
+            listing.id,
+          ),
+        });
       }
 
       return res.json({
@@ -513,7 +491,10 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
       if (!isUuid(req.params.id)) {
         return res.status(400).json({ error: "Invalid listing ID" });
       }
-      const ownedListing = await findOwnedListing(req.params.id, decoded.userId);
+      const ownedListing = await findOwnedListing(
+        req.params.id,
+        decoded.userId,
+      );
       if (!ownedListing) {
         return res.status(404).json({ error: "Listing not found" });
       }
@@ -528,20 +509,23 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
         category_id: sanitizedBody.category_id,
         title: sanitizedBody.title,
         // Let the repository generate the slug if not provided, or pass it
-        slug: sanitizedBody.title ? sanitizedBody.title.toLowerCase().replace(/\s+/g, "-") : undefined,
+        slug: sanitizedBody.title.toLowerCase().replace(/\s+/g, "-") ?? "", // optional
         description: sanitizedBody.description,
         target_audience: sanitizedBody.target_audience,
-        delivery_duration: sanitizedBody.delivery_duration,
-        work_place: sanitizedBody.work_place,
-        work_address: sanitizedBody.work_address,
+        delivery_duration: sanitizedBody.delivery_duration ?? "",
+        work_place: sanitizedBody.work_place ?? "",
+        work_address: sanitizedBody.work_address ?? "",
         starting_amount: sanitizedBody.starting_amount, // now null if was empty
         lowest_amount: sanitizedBody.lowest_amount, // now null if was empty
         auto_decline_amount: sanitizedBody.auto_decline_amount, // now null if was empty
         tags: sanitizedBody.tags,
         status: sanitizedBody.status,
         negotiation_style: sanitizedBody.negotiation_style,
-        inventory_count: sanitizedBody.inventory_count,
-        thumbnail_url: listingMedias.length > 0 ? listingMedias[0].url : ownedListing.thumbnail_url,
+        inventory_count: sanitizedBody.inventory_count ?? 0,
+        thumbnail_url:
+          listingMedias.length > 0
+            ? listingMedias[0].url
+            : ownedListing.thumbnail_url,
         medias: listingMedias,
       });
 
@@ -568,32 +552,50 @@ router.patch("/listings/:id", async (req: Request, res: Response) => {
 
 router.patch("/listings/:id/archive", async (req: Request, res: Response) => {
   const userId = getBearerUserId(req);
-  if (!userId) return res.status(401).json({ error: "A valid bearer token is required" });
-  if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
+  if (!userId)
+    return res.status(401).json({ error: "A valid bearer token is required" });
+  if (!isUuid(req.params.id))
+    return res.status(400).json({ error: "Invalid listing ID" });
   try {
     const listing = await findOwnedListing(req.params.id, userId);
     if (!listing) return res.status(404).json({ error: "Listing not found" });
     if (listing.status === ListingStatus.ARCHIVED) {
-      return res.json({ success: true, message: "Listing is already archived", data: listing });
+      return res.json({
+        success: true,
+        message: "Listing is already archived",
+        data: listing,
+      });
     }
-    const archived = await catalogRepository.updateListing(req.params.id, { status: ListingStatus.ARCHIVED });
-    return res.json({ success: true, message: "Listing archived successfully", data: archived });
+    const archived = await catalogRepository.updateListing(req.params.id, {
+      status: ListingStatus.ARCHIVED,
+    });
+    return res.json({
+      success: true,
+      message: "Listing archived successfully",
+      data: archived,
+    });
   } catch (error) {
-    return res.status(500).json({ error: "Failed to archive listing", details: error });
+    return res
+      .status(500)
+      .json({ error: "Failed to archive listing", details: error });
   }
 });
 
 router.delete("/listings/:id", async (req: Request, res: Response) => {
   const userId = getBearerUserId(req);
-  if (!userId) return res.status(401).json({ error: "A valid bearer token is required" });
-  if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
+  if (!userId)
+    return res.status(401).json({ error: "A valid bearer token is required" });
+  if (!isUuid(req.params.id))
+    return res.status(400).json({ error: "Invalid listing ID" });
   try {
     const listing = await findOwnedListing(req.params.id, userId);
     if (!listing) return res.status(404).json({ error: "Listing not found" });
     const deleted = await catalogRepository.deleteListing(req.params.id);
     return res.json({ success: true, deleted });
   } catch (error) {
-    return res.status(500).json({ error: "Failed to delete listing", details: error });
+    return res
+      .status(500)
+      .json({ error: "Failed to delete listing", details: error });
   }
 });
 
@@ -618,18 +620,16 @@ router.post(
       try {
         const decoded = verifyAccessToken(token);
 
+        console.log("Decoded Token:", decoded); // Debugging line to check the decoded token
         // Get user data
         const userData = await usersRepository.getUserById(decoded.userId);
+
+        console.log("User Data:", userData); // Debugging line to check the retrieved user data
 
         if (!userData) {
           return res.status(401).json({
             error: "Invalid Token",
           });
-        }
-
-        if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
-        if (!(await findOwnedListing(req.params.id, decoded.userId))) {
-          return res.status(404).json({ error: "Listing not found" });
         }
 
         let mediaUrl: string | undefined;
@@ -740,6 +740,7 @@ router.post(
 router.delete(
   "/listings-media/:id/delete",
   async (req: Request, res: Response) => {
+    console.log("okkkkkayyyyyyyy");
     if (!req.params.id) {
       return res.status(401).json({ error: "listing Id is required" });
     }
@@ -762,12 +763,6 @@ router.delete(
           return res.status(401).json({
             error: "Invalid Token",
           });
-        }
-
-        if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid media ID" });
-        const media = await catalogRepository.getListingMediaById(req.params.id);
-        if (!media || !(await findOwnedListing(media.listing_id, decoded.userId))) {
-          return res.status(404).json({ error: "Listing media not found" });
         }
 
         const removed = await catalogRepository.deleteListingMedia(
@@ -793,19 +788,9 @@ router.delete(
 
 router.put("/listings/:id/inventory", async (req: Request, res: Response) => {
   try {
-    const userId = getBearerUserId(req);
-    if (!userId) return res.status(401).json({ error: "A valid bearer token is required" });
-    if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
-    if (!(await findOwnedListing(req.params.id, userId))) return res.status(404).json({ error: "Listing not found" });
-    const input = {
-      sku: req.body?.sku,
-      quantity_available: req.body?.quantity_available,
-      reserved_quantity: req.body?.reserved_quantity,
-      allow_backorder: req.body?.allow_backorder,
-    };
     const inventory = await catalogRepository.setListingInventory(
       req.params.id,
-      input,
+      req.body,
     );
     return res.json(inventory);
   } catch (error) {
@@ -819,18 +804,9 @@ router.put(
   "/listings/:id/service-meta",
   async (req: Request, res: Response) => {
     try {
-      const userId = getBearerUserId(req);
-      if (!userId) return res.status(401).json({ error: "A valid bearer token is required" });
-      if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
-      if (!(await findOwnedListing(req.params.id, userId))) return res.status(404).json({ error: "Listing not found" });
-      const input = {
-        service_duration_minutes: req.body?.service_duration_minutes,
-        delivery_mode: req.body?.delivery_mode,
-        service_area_json: req.body?.service_area_json,
-      };
       const serviceMeta = await catalogRepository.setListingServiceMeta(
         req.params.id,
-        input,
+        req.body,
       );
       return res.json(serviceMeta);
     } catch (error) {
@@ -845,9 +821,10 @@ router.post("/listings/:id/save", async (req: Request, res: Response) => {
   try {
     const userId = getBearerUserId(req);
     if (!userId) {
-      return res.status(401).json({ error: "A valid bearer token is required" });
+      return res
+        .status(401)
+        .json({ error: "A valid bearer token is required" });
     }
-    if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
 
     const saved = await catalogRepository.saveListing(userId, req.params.id);
     return res.status(201).json(saved);
@@ -862,9 +839,10 @@ router.delete("/listings/:id/unsave", async (req: Request, res: Response) => {
   try {
     const userId = getBearerUserId(req);
     if (!userId) {
-      return res.status(401).json({ error: "A valid bearer token is required" });
+      return res
+        .status(401)
+        .json({ error: "A valid bearer token is required" });
     }
-    if (!isUuid(req.params.id)) return res.status(400).json({ error: "Invalid listing ID" });
 
     const removed = await catalogRepository.unsaveListing(
       userId,

@@ -7,8 +7,8 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "start": "node dist/index.js",
-    "dev": "nodemon --exec ts-node index.ts",
+    "start": "node dist/server.js",
+    "dev": "nodemon --exec ts-node server.ts",
     "build": "tsc",
     "db:push": "drizzle-kit push:pg",
     "db:generate": "drizzle-kit generate",
@@ -19,9 +19,10 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
     "@aws-sdk/s3-request-presigner": "^3.1045.0",
-    "@neondatabase/serverless": "^1.1.0",
+    "@neondatabase/serverless": "^1.2.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
+    "bufferutil": "^4.1.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -32,8 +33,9 @@
     "mongoose": "^9.6.2",
     "multer": "^2.1.1",
     "node-cron": "^4.4.1",
-    "nodemailer": "^8.0.8",
     "pg": "^8.20.0",
+    "resend": "^6.37.0",
+    "ws": "^8.22.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -44,8 +46,8 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^20.10.6",
     "@types/node-cron": "^3.0.11",
-    "@types/nodemailer": "^8.0.0",
     "@types/pg": "^8.20.0",
+    "@types/ws": "^8.18.2",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",

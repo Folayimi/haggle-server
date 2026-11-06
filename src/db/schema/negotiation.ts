@@ -21,12 +21,13 @@ import {
 import { users } from "./auth";
 import { listings } from "./catalog";
 import { liveSessions } from "./sessions";
-import { conversations } from "./messaging";
+import { conversations, messages } from "./messaging";
 import {
   NegotiationEventType,
   NegotiationThreadStatus,
   OfferKind,
 } from "./enums";
+import { sql } from "drizzle-orm";
 
 /**
  * NEGOTIATION_THREADS TABLE
@@ -37,8 +38,10 @@ export const negotiationThreads = pgTable(
   "negotiation_threads",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    conversation_id: uuid("conversation_id")
-      .references(() => conversations.id, { onDelete: "cascade" }),
+    conversation_id: uuid("conversation_id").references(
+      () => conversations.id,
+      { onDelete: "cascade" },
+    ),
     session_id: uuid("session_id").references(() => liveSessions.id, {
       onDelete: "cascade",
     }),
@@ -148,13 +151,13 @@ export const offers = pgTable(
 
     // Amount in transaction
     amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
-    currency: text("currency").notNull().default("USD"),
+    currency: text("currency").notNull().default("NGN"),
 
     // Sequence for ordering
     sequence_no: integer("sequence_no").notNull(),
 
     // Linked to parent offer (for counter-offers)
-    parent_offer_id: uuid("parent_offer_id").references(():any => offers.id, {
+    parent_offer_id: uuid("parent_offer_id").references((): any => offers.id, {
       onDelete: "set null",
     }),
 
@@ -176,6 +179,14 @@ export const offers = pgTable(
     ),
     parentOfferIdx: index("offers_parent_offer_id_idx").on(
       table.parent_offer_id,
+    ),
+    pendingThreadUniqueIdx: uniqueIndex("offers_one_pending_per_thread_uidx")
+      .on(table.thread_id)
+      .where(sql`${table.status} = 'pending'`),
+
+    threadSequenceUniqueIdx: uniqueIndex("offers_thread_sequence_uidx").on(
+      table.thread_id,
+      table.sequence_no,
     ),
   }),
 );
@@ -253,20 +264,36 @@ export const deals = pgTable(
     accepted_offer_id: uuid("accepted_offer_id")
       .notNull()
       .references(() => offers.id, { onDelete: "restrict" }),
-    buyer_id: uuid("buyer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    seller_id: uuid("seller_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    listing_id: uuid("listing_id").notNull().references(() => listings.id, { onDelete: "cascade" }),
+    buyer_id: uuid("buyer_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    seller_id: uuid("seller_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    listing_id: uuid("listing_id")
+      .notNull()
+      .references(() => listings.id, { onDelete: "cascade" }),
     amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
     currency: text("currency").notNull(),
     quantity: integer("quantity").notNull(),
     variant_snapshot: jsonb("variant_snapshot"),
     status: text("status").notNull().default("agreed"),
-    accepted_at: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
-    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    accepted_at: timestamp("accepted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
-    buyerIdx: index("deals_buyer_id_created_at_idx").on(table.buyer_id, table.created_at),
-    sellerIdx: index("deals_seller_id_created_at_idx").on(table.seller_id, table.created_at),
+    buyerIdx: index("deals_buyer_id_created_at_idx").on(
+      table.buyer_id,
+      table.created_at,
+    ),
+    sellerIdx: index("deals_seller_id_created_at_idx").on(
+      table.seller_id,
+      table.created_at,
+    ),
   }),
 );
 

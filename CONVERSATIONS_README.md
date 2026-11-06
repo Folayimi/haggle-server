@@ -568,7 +568,30 @@ Content-Type: application/json
 The authenticated user becomes the buyer. The seller is resolved from the
 listing. The server verifies that the listing is published, has inventory,
 the buyer is not the seller, and both parties are members of the conversation.
-Equivalent active negotiations are reused.
+An invalid conversation or listing is rejected without exposing database
+details. The endpoint returns:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "negotiation-uuid",
+    "conversation_id": "conversation-uuid",
+    "listing_id": "listing-uuid",
+    "buyer_id": "buyer-uuid",
+    "seller_id": "seller-uuid",
+    "status": "active",
+    "quantity": 1
+  }
+}
+```
+
+Equivalent active negotiations are reused, so repeated clicks return the
+same active negotiation rather than creating another one. This is also safe
+for simultaneous requests: the database has a partial unique index on
+`conversation_id`, `listing_id`, `buyer_id`, and `seller_id` for active rows,
+and a unique-violation race is resolved by returning the row created by the
+winning request.
 
 ### Submit an offer
 
@@ -638,6 +661,8 @@ The negotiation schema now includes:
 Migration:
 
 - `migrations/0002_messaging_negotiation.sql`
+- `migrations/0003_sync_negotiation_threads.sql` (synchronizes deployed
+  negotiation columns and adds the active-negotiation uniqueness constraint)
 
 Negotiation events are also written as structured `negotiation_event`
 messages in the conversation timeline when a negotiation starts. The

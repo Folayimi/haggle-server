@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { messagingRepository } from "../storage";
+import { catalogRepository, messagingRepository } from "../storage";
 import { getBearerUserId } from "./http";
 
 const router = Router();
@@ -18,7 +18,10 @@ const requireMembership = async (
   res: Response,
   userId: string,
 ) => {
-  const isMember = await messagingRepository.isParticipant(req.params.id, userId);
+  const isMember = await messagingRepository.isParticipant(
+    req.params.id,
+    userId,
+  );
   if (!isMember) {
     res.status(403).json({ error: "You are not a conversation participant" });
     return false;
@@ -60,7 +63,8 @@ router.post("/", async (req: Request, res: Response) => {
     );
     if (!body.conversation_type || participantIds.length < 2) {
       return res.status(400).json({
-        error: "conversation_type and at least one other participant are required",
+        error:
+          "conversation_type and at least one other participant are required",
       });
     }
 
@@ -83,9 +87,10 @@ router.get("/:id/messages", async (req: Request, res: Response) => {
     const userId = authenticatedUser(req, res);
     if (!userId || !(await requireMembership(req, res, userId))) return;
 
-    const before = typeof req.query.before === "string"
-      ? new Date(req.query.before)
-      : undefined;
+    const before =
+      typeof req.query.before === "string"
+        ? new Date(req.query.before)
+        : undefined;
     const messages = await messagingRepository.listMessages(
       req.params.id,
       before && !Number.isNaN(before.valueOf()) ? before : undefined,
@@ -96,7 +101,11 @@ router.get("/:id/messages", async (req: Request, res: Response) => {
       messages.map((message) => message.id),
     );
 
-    return res.json({ data: messages, attachments: details.attachments, receipts: details.receipts });
+    return res.json({
+      data: messages,
+      attachments: details.attachments,
+      receipts: details.receipts,
+    });
   } catch (error) {
     return res.status(500).json({ error: "Failed to fetch messages" });
   }
@@ -111,6 +120,8 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
       message_type?: string;
       text_body?: string;
       voice_url?: string;
+      negotiation_thread_id?: string;
+      listing_id?: string;
       voice_duration_seconds?: number;
       shared_listing_id?: string;
       metadata_json?: unknown;
@@ -119,12 +130,27 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "message_type is required" });
     }
 
+    let attachedListing = null;
+
+    if (body.listing_id) {
+      attachedListing = await catalogRepository.getListingById(
+        body.listing_id ?? "",
+      );
+      if (!attachedListing) {
+        return res.status(400).json({ error: "Invalid listing_id" });
+      }
+    }
+
     const message = await messagingRepository.sendMessage({
       conversation_id: req.params.id,
       sender_user_id: userId,
       message_type: body.message_type as never,
       text_body: body.text_body,
       voice_url: body.voice_url,
+      negotiation_thread_id: body.negotiation_thread_id,
+      listing: attachedListing
+        ? { ...attachedListing, medias: attachedListing.medias ?? [] }
+        : {},
       voice_duration_seconds: body.voice_duration_seconds,
       shared_listing_id: body.shared_listing_id,
       metadata_json: body.metadata_json,
@@ -135,95 +161,121 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
   }
 });
 
-router.patch("/:id/messages/:messageId", async (req: Request, res: Response) => {
-  try {
-    const userId = authenticatedUser(req, res);
-    if (!userId || !(await requireMembership(req, res, userId))) return;
-    const textBody = (req.body as { text_body?: string }).text_body;
-    if (!textBody?.trim()) {
-      return res.status(400).json({ error: "text_body is required" });
+router.patch(
+  "/:id/messages/:messageId",
+  async (req: Request, res: Response) => {
+    try {
+      const userId = authenticatedUser(req, res);
+      if (!userId || !(await requireMembership(req, res, userId))) return;
+      const textBody = (req.body as { text_body?: string }).text_body;
+      if (!textBody?.trim()) {
+        return res.status(400).json({ error: "text_body is required" });
+      }
+      const message = await messagingRepository.editMessage(
+        req.params.messageId,
+        userId,
+        textBody.trim(),
+      );
+      if (!message) return res.status(404).json({ error: "Message not found" });
+      return res.json(message);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to edit message" });
     }
-    const message = await messagingRepository.editMessage(
-      req.params.messageId,
-      userId,
-      textBody.trim(),
-    );
-    if (!message) return res.status(404).json({ error: "Message not found" });
-    return res.json(message);
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to edit message" });
-  }
-});
+  },
+);
 
-router.delete("/:id/messages/:messageId", async (req: Request, res: Response) => {
-  try {
-    const userId = authenticatedUser(req, res);
-    if (!userId || !(await requireMembership(req, res, userId))) return;
-    const message = await messagingRepository.deleteMessage(req.params.messageId, userId);
-    if (!message) return res.status(404).json({ error: "Message not found" });
-    return res.json(message);
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to delete message" });
-  }
-});
-
-router.post("/:id/messages/:messageId/attachments", async (req: Request, res: Response) => {
-  try {
-    const userId = authenticatedUser(req, res);
-    if (!userId || !(await requireMembership(req, res, userId))) return;
-    const body = req.body as {
-      attachment_type?: string;
-      url?: string;
-      thumbnail_url?: string;
-      size_bytes?: number;
-    };
-    if (!body.attachment_type || !body.url) {
-      return res.status(400).json({ error: "attachment_type and url are required" });
+router.delete(
+  "/:id/messages/:messageId",
+  async (req: Request, res: Response) => {
+    try {
+      const userId = authenticatedUser(req, res);
+      if (!userId || !(await requireMembership(req, res, userId))) return;
+      const message = await messagingRepository.deleteMessage(
+        req.params.messageId,
+        userId,
+      );
+      if (!message) return res.status(404).json({ error: "Message not found" });
+      return res.json(message);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to delete message" });
     }
-    if (!["screenshot", "image", "video", "document"].includes(body.attachment_type)) {
-      return res.status(400).json({ error: "Invalid attachment_type" });
-    }
-    const attachment = await messagingRepository.addAttachmentToConversation(
-      req.params.id,
-      req.params.messageId,
-      {
-      attachment_type: body.attachment_type as never,
-      url: body.url,
-      thumbnail_url: body.thumbnail_url,
-      size_bytes: body.size_bytes,
-      },
-    );
-    return res.status(201).json(attachment);
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to add attachment" });
-  }
-});
+  },
+);
 
-router.post("/:id/messages/:messageId/receipts", async (req: Request, res: Response) => {
-  try {
-    const userId = authenticatedUser(req, res);
-    if (!userId || !(await requireMembership(req, res, userId))) return;
-    const status = (req.body as { status?: string }).status;
-    if (!status) return res.status(400).json({ error: "status is required" });
-    const receipt = await messagingRepository.markMessageReceipt(
-      req.params.id,
-      req.params.messageId,
-      userId,
-      status as never,
-    );
-    return res.json(receipt);
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to mark receipt" });
-  }
-});
+router.post(
+  "/:id/messages/:messageId/attachments",
+  async (req: Request, res: Response) => {
+    try {
+      const userId = authenticatedUser(req, res);
+      if (!userId || !(await requireMembership(req, res, userId))) return;
+      const body = req.body as {
+        attachment_type?: string;
+        url?: string;
+        thumbnail_url?: string;
+        size_bytes?: number;
+      };
+      if (!body.attachment_type || !body.url) {
+        return res
+          .status(400)
+          .json({ error: "attachment_type and url are required" });
+      }
+      if (
+        !["screenshot", "image", "video", "document"].includes(
+          body.attachment_type,
+        )
+      ) {
+        return res.status(400).json({ error: "Invalid attachment_type" });
+      }
+      const attachment = await messagingRepository.addAttachmentToConversation(
+        req.params.id,
+        req.params.messageId,
+        {
+          attachment_type: body.attachment_type as never,
+          url: body.url,
+          thumbnail_url: body.thumbnail_url,
+          size_bytes: body.size_bytes,
+        },
+      );
+      return res.status(201).json(attachment);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to add attachment" });
+    }
+  },
+);
+
+router.post(
+  "/:id/messages/:messageId/receipts",
+  async (req: Request, res: Response) => {
+    try {
+      const userId = authenticatedUser(req, res);
+      if (!userId || !(await requireMembership(req, res, userId))) return;
+      const status = (req.body as { status?: string }).status;
+      if (!status) return res.status(400).json({ error: "status is required" });
+      const receipt = await messagingRepository.markMessageReceipt(
+        req.params.id,
+        req.params.messageId,
+        userId,
+        status as never,
+      );
+      return res.json(receipt);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to mark receipt" });
+    }
+  },
+);
 
 router.post("/:id/read", async (req: Request, res: Response) => {
   try {
     const userId = authenticatedUser(req, res);
     if (!userId || !(await requireMembership(req, res, userId))) return;
     const messageId = (req.body as { message_id?: string }).message_id;
-    if (!messageId) return res.status(400).json({ error: "message_id is required" });
-    const state = await messagingRepository.updateReadState(req.params.id, userId, messageId);
+    if (!messageId)
+      return res.status(400).json({ error: "message_id is required" });
+    const state = await messagingRepository.updateReadState(
+      req.params.id,
+      userId,
+      messageId,
+    );
     return res.json(state);
   } catch (error) {
     return res.status(500).json({ error: "Failed to update read state" });
